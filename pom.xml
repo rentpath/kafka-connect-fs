@@ -1,35 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
-    <groupId>com.github.mmolimar.kafka.connect</groupId>
+    <groupId>com.rentpath</groupId>
     <artifactId>kafka-connect-fs</artifactId>
-    <version>0.3-SNAPSHOT</version>
+    <name>Kafka Connect Filesystem Connector</name>
+    <version>0.1.0-SNAPSHOT</version>
+    <url>https://github.com/rentpath/kafka-connect-fs</url>
+    <developers>
+        <developer>
+            <name>Mario Molina</name>
+            <organization>Mario Molina</organization>
+            <organizationUrl>https://mmolimar.blogspot.com</organizationUrl>
+        </developer>
+        <developer>
+            <email>jholland@rentpath.com</email>
+            <name>Jeremy Holland</name>
+            <organization>RentPath</organization>
+            <organizationUrl>https://rentpath.com</organizationUrl>
+        </developer>
+    </developers>
+    <description>a Kafka Connector for reading records from files in the file systems specified and load them into
+        Kafka.
+    </description>
     <packaging>jar</packaging>
-
-    <name>kafka-connect-fs</name>
-
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+        </license>
+    </licenses>
     <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <kafka.version>0.10.1.0</kafka.version>
-        <confluent.version>3.1.1</confluent.version>
+        <javac.version>1.8</javac.version>
+        <kafka.version>2.4.0</kafka.version>
+        <confluent.version>5.3.2</confluent.version>
         <hadoop.version>2.9.0</hadoop.version>
         <avro.version>1.8.1</avro.version>
         <parquet.version>1.9.0</parquet.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.4</easymock.version>
         <powermock.version>1.6.6</powermock.version>
-        <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
-        <maven-compiler-plugin.version>3.6.1</maven-compiler-plugin.version>
-        <maven-assembly-plugin.version>3.0.0</maven-assembly-plugin.version>
-        <jacoco-maven-plugin.version>0.7.9</jacoco-maven-plugin.version>
-        <coveralls-maven-plugin.version>4.3.0</coveralls-maven-plugin.version>
-    </properties>
+        <okHttpVersion>2.4.0</okHttpVersion>
+        <minimalJsonVersion>0.9.1</minimalJsonVersion>
+        <file.encoding>UTF-8</file.encoding>
+        <downloadSources>true</downloadSources>
+        <enforced.java.version>[${javac.version},)</enforced.java.version>
+        <enforced.maven.version>[3.0.2,)</enforced.maven.version>
 
+        <!-- Plugin versions and config -->
+        <maven-surefire-plugin.argLine>-Xmx4096m -XX:MaxPermSize=768m -XX:+HeapDumpOnOutOfMemoryError
+        </maven-surefire-plugin.argLine>
+        <maven-surefire-plugin.version>2.17</maven-surefire-plugin.version>
+        <maven-surefire-report-plugin.version>${maven-surefire-plugin.version}</maven-surefire-report-plugin.version>
+        <maven-failsafe-plugin.version>${maven-surefire-plugin.version}</maven-failsafe-plugin.version>
+
+        <maven-clean-plugin.version>2.5</maven-clean-plugin.version>
+        <maven-compiler-plugin.version>3.1</maven-compiler-plugin.version>
+        <maven-source-plugin.version>2.3</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>2.8.1</maven-javadoc-plugin.version>
+        <maven-gpg-plugin.version>1.5</maven-gpg-plugin.version>
+    </properties>
+    <scm>
+        <connection>scm:git:git://github.com/rentpath/kafka-connect-fs.git</connection>
+        <developerConnection>scm:git:git@github.com:rentpath/kafka-connect-fs.git</developerConnection>
+        <url>https://github.com/rentpath/kafka-connect-fs</url>
+        <tag>HEAD</tag>
+    </scm>
+    <distributionManagement>
+        <snapshotRepository>
+            <id>rentpath</id>
+            <url>https://nexus.tools.rentpath.com/repository/maven-snapshots/</url>
+        </snapshotRepository>
+        <repository>
+            <id>rentpath</id>
+            <url>https://nexus.tools.rentpath.com/repository/maven-releases/</url>
+        </repository>
+    </distributionManagement>
     <dependencies>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-api</artifactId>
+            <version>${kafka.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>connect-json</artifactId>
             <version>${kafka.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -96,87 +151,102 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
     <build>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>${maven-jar-plugin.version}</version>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>1.6.7</version>
+                <extensions>true</extensions>
                 <configuration>
-                    <archive>
-                        <manifest>
-                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
-                            <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
-                        </manifest>
-                    </archive>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                 </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>${maven-clean-plugin.version}</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven-compiler-plugin.version}</version>
-                <inherited>true</inherited>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <source>${javac.version}</source>
+                    <target>${javac.version}</target>
+                    <useIncrementalCompilation>false</useIncrementalCompilation>
                 </configuration>
             </plugin>
             <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>${maven-assembly-plugin.version}</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven-javadoc-plugin.version}</version>
                 <configuration>
-                    <descriptors>
-                        <descriptor>src/main/assembly/development.xml</descriptor>
-                        <descriptor>src/main/assembly/package.xml</descriptor>
-                    </descriptors>
+                    <javadocExecutable>${java.home}/bin/javadoc</javadocExecutable>
                 </configuration>
                 <executions>
                     <execution>
-                        <id>make-assembly</id>
-                        <phase>package</phase>
+                        <id>attach-javadoc</id>
                         <goals>
-                            <goal>single</goal>
+                            <goal>jar</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco-maven-plugin.version}</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${maven-source-plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>prepare-agent</id>
+                        <id>attach-sources</id>
                         <goals>
-                            <goal>prepare-agent</goal>
+                            <goal>jar</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.eluder.coveralls</groupId>
-                <artifactId>coveralls-maven-plugin</artifactId>
-                <version>${coveralls-maven-plugin.version}</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>2.5.3</version>
+                <configuration>
+                    <localCheckout>true</localCheckout>
+                    <pushChanges>false</pushChanges>
+                    <mavenExecutorId>forked-path</mavenExecutorId>
+                    <arguments>-Dgpg.passphrase="${gpg.passphrase}"</arguments>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>${maven-gpg-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
     </build>
     <repositories>
         <repository>
             <id>confluent</id>
-            <name>Confluent</name>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
             <url>http://packages.confluent.io/maven/</url>
         </repository>
     </repositories>
