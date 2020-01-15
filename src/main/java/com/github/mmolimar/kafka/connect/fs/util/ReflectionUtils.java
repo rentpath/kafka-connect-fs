@@ -2,6 +2,7 @@ package com.github.mmolimar.kafka.connect.fs.util;
 
 import com.github.mmolimar.kafka.connect.fs.FsSourceTaskConfig;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
+import com.github.mmolimar.kafka.connect.fs.file.reader.schema.SchemaReader;
 import com.github.mmolimar.kafka.connect.fs.policy.Policy;
 import org.apache.commons.lang.reflect.ConstructorUtils;
 import org.apache.hadoop.fs.FileSystem;
@@ -21,6 +22,10 @@ public class ReflectionUtils {
 
     public static Policy makePolicy(Class<? extends Policy> clazz, FsSourceTaskConfig conf) throws Throwable {
         return make(clazz, conf);
+    }
+
+    public static SchemaReader makeSchemaReader(FileSystem fs, Class<? extends SchemaReader> clazz, Map<String, Object> config) throws Throwable {
+        return make(clazz, fs, config);
     }
 
     private static <T> T make(Class<T> clazz, Object... args) throws Throwable {

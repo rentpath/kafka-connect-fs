@@ -4,6 +4,7 @@ import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.AgnosticFileReader;
 import com.github.mmolimar.kafka.connect.fs.file.reader.TextFileReader;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -90,8 +91,8 @@ public class TextFileReaderTest extends HdfsFileReaderTestBase {
     }
 
     @Override
-    protected void checkData(Struct record, long index) {
-        assertTrue(record.get(FIELD_NAME_VALUE).toString().startsWith(index + "_"));
+    protected void checkData(SchemaAndValue record, long index) {
+        assertTrue(((Struct) record.value()).get(FIELD_NAME_VALUE).toString().startsWith(index + "_"));
     }
 
     @Override

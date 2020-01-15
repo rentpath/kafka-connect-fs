@@ -13,7 +13,7 @@ import java.nio.file.Path;
 
 public abstract class LocalPolicyTestBase extends PolicyTestBase {
 
-    private static Path localDir;
+    protected static Path localDir;
 
     @BeforeClass
     public static void initFs() throws IOException {

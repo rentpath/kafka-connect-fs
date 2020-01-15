@@ -8,6 +8,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -37,11 +38,16 @@ public class ParquetFileReader extends AbstractFileReader<GenericRecord> {
 
 
     public ParquetFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws IOException {
-        super(fs, filePath, new GenericRecordToStruct(), config);
+        super(fs, filePath, config);
 
         this.offset = new ParquetOffset(0);
         this.reader = initReader();
         this.closed = false;
+    }
+
+    @Override
+    protected ReaderAdapter<GenericRecord> buildAdapter(Map<String, Object> config) {
+        return new GenericRecordToStruct();
     }
 
     private ParquetReader<GenericRecord> initReader() throws IOException {
@@ -163,8 +169,8 @@ public class ParquetFileReader extends AbstractFileReader<GenericRecord> {
         }
 
         @Override
-        public Struct apply(GenericRecord record) {
-            return (Struct) avroData.toConnectData(record.getSchema(), record).value();
+        public SchemaAndValue apply(GenericRecord record) {
+            return avroData.toConnectData(record.getSchema(), record);
         }
     }
 }

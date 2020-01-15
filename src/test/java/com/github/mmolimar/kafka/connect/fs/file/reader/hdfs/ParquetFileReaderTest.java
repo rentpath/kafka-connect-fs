@@ -12,6 +12,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.parquet.avro.AvroParquetWriter;
@@ -91,7 +92,7 @@ public class ParquetFileReaderTest extends HdfsFileReaderTestBase {
         }};
         reader = getReader(FileSystem.newInstance(fsUri, new Configuration()), dataFile, cfg);
         while (reader.hasNext()) {
-            Struct record = reader.next();
+            Struct record = (Struct) reader.next().value();
             assertNotNull(record.schema().field(FIELD_INDEX));
             assertNotNull(record.schema().field(FIELD_NAME));
             assertNull(record.schema().field(FIELD_SURNAME));
@@ -137,10 +138,11 @@ public class ParquetFileReaderTest extends HdfsFileReaderTestBase {
     }
 
     @Override
-    protected void checkData(Struct record, long index) {
-        assertTrue((Integer) record.get(FIELD_INDEX) == index);
-        assertTrue(record.get(FIELD_NAME).toString().startsWith(index + "_"));
-        assertTrue(record.get(FIELD_SURNAME).toString().startsWith(index + "_"));
+    protected void checkData(SchemaAndValue record, long index) {
+        Struct recordStruct = (Struct) record.value();
+        assertTrue((Integer) recordStruct.get(FIELD_INDEX) == index);
+        assertTrue(recordStruct.get(FIELD_NAME).toString().startsWith(index + "_"));
+        assertTrue(recordStruct.get(FIELD_SURNAME).toString().startsWith(index + "_"));
     }
 
     @Override

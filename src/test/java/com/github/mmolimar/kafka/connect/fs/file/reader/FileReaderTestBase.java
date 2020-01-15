@@ -4,7 +4,7 @@ import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -91,8 +91,7 @@ public abstract class FileReaderTestBase {
 
         int recordCount = 0;
         while (reader.hasNext()) {
-            Struct record = reader.next();
-            checkData(record, recordCount);
+            checkData(reader.next(), recordCount);
             recordCount++;
         }
         assertEquals("The number of records in the file does not match", NUM_RECORDS, recordCount);
@@ -148,7 +147,7 @@ public abstract class FileReaderTestBase {
 
     protected abstract Offset getOffset(long offset);
 
-    protected abstract void checkData(Struct record, long index);
+    protected abstract void checkData(SchemaAndValue record, long index);
 
     protected abstract String getFileExtension();
 

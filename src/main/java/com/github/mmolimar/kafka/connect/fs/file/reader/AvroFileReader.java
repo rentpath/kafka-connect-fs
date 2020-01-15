@@ -10,6 +10,7 @@ import org.apache.hadoop.fs.AvroFSInput;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 
@@ -29,11 +30,15 @@ public class AvroFileReader extends AbstractFileReader<GenericRecord> {
     private Schema schema;
 
     public AvroFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws IOException {
-        super(fs, filePath, new GenericRecordToStruct(), config);
-
+        super(fs, filePath, config);
         AvroFSInput input = new AvroFSInput(FileContext.getFileContext(filePath.toUri()), filePath);
         this.reader = new DataFileReader<>(input, new SpecificDatumReader<>(this.schema));
         this.offset = new AvroOffset(0);
+    }
+
+    @Override
+    protected ReaderAdapter<GenericRecord> buildAdapter(Map<String, Object> config) {
+        return new GenericRecordToStruct();
     }
 
     protected void configure(Map<String, Object> config) {
@@ -108,8 +113,8 @@ public class AvroFileReader extends AbstractFileReader<GenericRecord> {
         }
 
         @Override
-        public Struct apply(GenericRecord record) {
-            return (Struct) avroData.toConnectData(record.getSchema(), record).value();
+        public SchemaAndValue apply(GenericRecord record) {
+            return avroData.toConnectData(record.getSchema(), record);
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.github.mmolimar.kafka.connect.fs.file.reader.local;
+package com.github.mmolimar.kafka.connect.fs.file.reader.hdfs;
 
 import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.AgnosticFileReader;
@@ -10,18 +10,17 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
+import java.util.zip.GZIPOutputStream;
 
 import static org.junit.Assert.assertTrue;
 
-public class TextFileReaderTest extends LocalFileReaderTestBase {
+public class GzippedTextFileReaderTest extends HdfsFileReaderTestBase {
 
     private static final String FIELD_NAME_VALUE = "custom_field_name";
     private static final String FILE_EXTENSION = "txt";
@@ -32,17 +31,18 @@ public class TextFileReaderTest extends LocalFileReaderTestBase {
         dataFile = createDataFile();
         readerConfig = new HashMap<String, Object>() {{
             put(TextFileReader.FILE_READER_TEXT_FIELD_NAME_VALUE, FIELD_NAME_VALUE);
+            put(TextFileReader.FILE_READER_FILES_GZIPPED, "true");
         }};
     }
 
     private static Path createDataFile() throws IOException {
-        File txtFile = File.createTempFile("test-", "." + FILE_EXTENSION);
-        try (FileWriter writer = new FileWriter(txtFile)) {
-
+        File txtFile = File.createTempFile("test-", "." + FILE_EXTENSION + ".gz");
+        try (FileOutputStream fileOutStream = new FileOutputStream(txtFile);
+             GZIPOutputStream outStream = new GZIPOutputStream(fileOutStream)) {
             IntStream.range(0, NUM_RECORDS).forEach(index -> {
                 String value = String.format("%d_%s", index, UUID.randomUUID());
                 try {
-                    writer.append(value + "\n");
+                    outStream.write((value + "\n").getBytes());
                     OFFSETS_BY_INDEX.put(index, Long.valueOf(index++));
                 } catch (IOException ioe) {
                     throw new RuntimeException(ioe);
@@ -71,6 +71,7 @@ public class TextFileReaderTest extends LocalFileReaderTestBase {
         Map<String, Object> cfg = new HashMap<String, Object>() {{
             put(TextFileReader.FILE_READER_TEXT_FIELD_NAME_VALUE, FIELD_NAME_VALUE);
             put(TextFileReader.FILE_READER_TEXT_ENCODING, "Cp1252");
+            put(TextFileReader.FILE_READER_FILES_GZIPPED, "true");
         }};
         reader = getReader(fs, dataFile, cfg);
         readAllData();
@@ -92,7 +93,8 @@ public class TextFileReaderTest extends LocalFileReaderTestBase {
 
     @Override
     protected void checkData(SchemaAndValue record, long index) {
-        assertTrue(((Struct) record.value()).get(FIELD_NAME_VALUE).toString().startsWith(index + "_"));
+        Struct recordStruct = (Struct) record.value();
+        assertTrue(recordStruct.get(FIELD_NAME_VALUE).toString().startsWith(index + "_"));
     }
 
     @Override

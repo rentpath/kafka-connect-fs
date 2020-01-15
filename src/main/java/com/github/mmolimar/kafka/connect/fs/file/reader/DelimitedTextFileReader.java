@@ -4,6 +4,7 @@ import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 
@@ -31,8 +32,7 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
     private boolean hasHeader;
 
     public DelimitedTextFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws IOException {
-        super(fs, filePath, new DelimitedTxtToStruct(), config);
-
+        super(fs, filePath, config);
         //mapping encoding for text file reader
         if (config.get(FILE_READER_DELIMITED_ENCODING) != null) {
             config.put(TextFileReader.FILE_READER_TEXT_ENCODING, config.get(FILE_READER_DELIMITED_ENCODING));
@@ -55,6 +55,11 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
             }
         }
         this.schema = schemaBuilder.build();
+    }
+
+    @Override
+    protected ReaderAdapter<DelimitedRecord> buildAdapter(Map<String, Object> config) {
+        return new DelimitedTxtToStruct();
     }
 
     @Override
@@ -136,14 +141,14 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
     static class DelimitedTxtToStruct implements ReaderAdapter<DelimitedRecord> {
 
         @Override
-        public Struct apply(DelimitedRecord record) {
+        public SchemaAndValue apply(DelimitedRecord record) {
             Struct struct = new Struct(record.schema);
             IntStream.range(0, record.schema.fields().size()).forEach(index -> {
                 if (index < record.values.length) {
                     struct.put(record.schema.fields().get(index).name(), record.values[index]);
                 }
             });
-            return struct;
+            return new SchemaAndValue(struct.schema(), struct);
         }
     }
 

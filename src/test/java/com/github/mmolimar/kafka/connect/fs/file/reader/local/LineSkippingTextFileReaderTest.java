@@ -21,7 +21,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.Assert.assertTrue;
 
-public class TextFileReaderTest extends LocalFileReaderTestBase {
+public class LineSkippingTextFileReaderTest extends LocalFileReaderTestBase {
 
     private static final String FIELD_NAME_VALUE = "custom_field_name";
     private static final String FILE_EXTENSION = "txt";
@@ -32,6 +32,7 @@ public class TextFileReaderTest extends LocalFileReaderTestBase {
         dataFile = createDataFile();
         readerConfig = new HashMap<String, Object>() {{
             put(TextFileReader.FILE_READER_TEXT_FIELD_NAME_VALUE, FIELD_NAME_VALUE);
+            put(TextFileReader.FILE_READER_LINES_SKIP, "2");
         }};
     }
 
@@ -42,6 +43,7 @@ public class TextFileReaderTest extends LocalFileReaderTestBase {
             IntStream.range(0, NUM_RECORDS).forEach(index -> {
                 String value = String.format("%d_%s", index, UUID.randomUUID());
                 try {
+                    writer.append("thisisgarbage\n");
                     writer.append(value + "\n");
                     OFFSETS_BY_INDEX.put(index, Long.valueOf(index++));
                 } catch (IOException ioe) {
@@ -71,6 +73,7 @@ public class TextFileReaderTest extends LocalFileReaderTestBase {
         Map<String, Object> cfg = new HashMap<String, Object>() {{
             put(TextFileReader.FILE_READER_TEXT_FIELD_NAME_VALUE, FIELD_NAME_VALUE);
             put(TextFileReader.FILE_READER_TEXT_ENCODING, "Cp1252");
+            put(TextFileReader.FILE_READER_LINES_SKIP, "2");
         }};
         reader = getReader(fs, dataFile, cfg);
         readAllData();

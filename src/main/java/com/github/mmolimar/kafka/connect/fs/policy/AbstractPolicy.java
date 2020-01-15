@@ -2,6 +2,7 @@ package com.github.mmolimar.kafka.connect.fs.policy;
 
 import com.github.mmolimar.kafka.connect.fs.FsSourceTaskConfig;
 import com.github.mmolimar.kafka.connect.fs.file.FileMetadata;
+import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -10,6 +11,9 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -25,16 +29,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-abstract class AbstractPolicy implements Policy {
+public abstract class AbstractPolicy implements Policy {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     protected final List<FileSystem> fileSystems;
-    protected final Pattern fileRegexp;
+    protected final Pattern filePattern;
 
     private final FsSourceTaskConfig conf;
     private final AtomicInteger executions;
-    private final boolean recursive;
+    protected final boolean recursive;
     private boolean interrupted;
 
     public AbstractPolicy(FsSourceTaskConfig conf) throws IOException {
@@ -42,7 +46,7 @@ abstract class AbstractPolicy implements Policy {
         this.conf = conf;
         this.executions = new AtomicInteger(0);
         this.recursive = conf.getBoolean(FsSourceTaskConfig.POLICY_RECURSIVE);
-        this.fileRegexp = Pattern.compile(conf.getString(FsSourceTaskConfig.POLICY_REGEXP));
+        this.filePattern = Pattern.compile(conf.getString(FsSourceTaskConfig.POLICY_REGEXP));
         this.interrupted = false;
 
         Map<String, Object> customConfigs = customConfigs();
@@ -101,7 +105,7 @@ abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public final Iterator<FileMetadata> execute() throws IOException {
+    public Iterator<FileMetadata> execute() throws IOException {
         if (hasEnded()) {
             throw new IllegalWorkerStateException("Policy has ended. Cannot be retried");
         }
@@ -129,7 +133,11 @@ abstract class AbstractPolicy implements Policy {
     protected void postCheck() {
     }
 
-    public Iterator<FileMetadata> listFiles(FileSystem fs) throws IOException {
+    protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern) {
+        return (fileStatus.isFile() && pattern.matcher(fileStatus.getPath().getName()).find());
+    }
+
+    protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Map<String, Object> opts) throws IOException {
         return new Iterator<FileMetadata>() {
             RemoteIterator<LocatedFileStatus> it = fs.listFiles(fs.getWorkingDirectory(), recursive);
             LocatedFileStatus current = null;
@@ -143,8 +151,7 @@ abstract class AbstractPolicy implements Policy {
                         current = it.next();
                         return hasNext();
                     }
-                    if (current.isFile() &&
-                            fileRegexp.matcher(current.getPath().getName()).find()) {
+                    if (shouldInclude(current, pattern)) {
                         return true;
                     }
                     current = null;
@@ -159,11 +166,19 @@ abstract class AbstractPolicy implements Policy {
                 if (!hasNext() && current == null) {
                     throw new NoSuchElementException("There are no more items");
                 }
-                FileMetadata metadata = toMetadata(current);
+                FileMetadata metadata = toMetadata(current, opts);
                 current = null;
                 return metadata;
             }
         };
+    }
+
+    protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern) throws IOException {
+        return buildFileIterator(fs, pattern, null);
+    }
+
+    public Iterator<FileMetadata> listFiles(FileSystem fs) throws IOException {
+        return buildFileIterator(fs, filePattern);
     }
 
     @Override
@@ -177,7 +192,7 @@ abstract class AbstractPolicy implements Policy {
         return executions.get();
     }
 
-    protected FileMetadata toMetadata(LocatedFileStatus fileStatus) {
+    protected FileMetadata toMetadata(LocatedFileStatus fileStatus, Map<String, Object> opts) {
         List<FileMetadata.BlockInfo> blocks = new ArrayList<>();
 
         blocks.addAll(Arrays.stream(fileStatus.getBlockLocations())
@@ -185,16 +200,29 @@ abstract class AbstractPolicy implements Policy {
                         new FileMetadata.BlockInfo(block.getOffset(), block.getLength(), block.isCorrupt()))
                 .collect(Collectors.toList()));
 
-        return new FileMetadata(fileStatus.getPath().toString(), fileStatus.getLen(), blocks);
+        FileMetadata metadata = new FileMetadata(fileStatus.getPath().toString(), fileStatus.getLen(), blocks);
+        if (opts != null)
+            for (String key : opts.keySet())
+                metadata.setOpt(key, opts.get(key));
+
+        return metadata;
+    }
+
+    public FileReader seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
+        if (offset != null && offset.get("offset") != null) {
+            reader.seek(() -> (Long) offset.get("offset"));
+        }
+        return reader;
+    }
+
+    protected boolean shouldOffer(FileMetadata metadata, Map<String, Object> offset) {
+        return true;
     }
 
     @Override
-    public FileReader offer(FileMetadata metadata, OffsetStorageReader offsetStorageReader) throws IOException {
-        Map<String, Object> partition = new HashMap<String, Object>() {{
-            put("path", metadata.getPath());
-            //TODO manage blocks
-            //put("blocks", metadata.getBlocks().toString());
-        }};
+    public FileReader offer(FileMetadata metadata, Map<String, Object> lastOffset) throws IOException {
+        if (!shouldOffer(metadata, lastOffset))
+            return null;
 
         FileSystem current = fileSystems.stream()
                 .filter(fs -> metadata.getPath().startsWith(fs.getWorkingDirectory().toString()))
@@ -208,11 +236,7 @@ abstract class AbstractPolicy implements Policy {
             throw new ConnectException("An error has occurred when creating reader for file: " + metadata.getPath(), t);
         }
 
-        Map<String, Object> offset = offsetStorageReader.offset(partition);
-        if (offset != null && offset.get("offset") != null) {
-            reader.seek(() -> (Long) offset.get("offset"));
-        }
-        return reader;
+        return seekReader(metadata, lastOffset, reader);
     }
 
     Iterator<FileMetadata> concat(final Iterator<FileMetadata> it1,
@@ -251,5 +275,37 @@ abstract class AbstractPolicy implements Policy {
             b.append(Utils.NL);
         }
         log.info(b.toString());
+    }
+
+    @Override
+    public SchemaAndValue buildKey(FileMetadata metadata) {
+        Map<String, Object> value = new HashMap<String, Object>() {
+            {
+                put("path", metadata.getPath());
+                //TODO manage blocks
+                //put("blocks", metadata.getBlocks().toString());
+            }
+        };
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("path", SchemaBuilder.STRING_SCHEMA);
+        return new SchemaAndValue(builder.build(), value);
+    }
+
+    @Override
+    public SchemaAndValue buildMetadata(FileMetadata metadata, boolean isLast) {
+        SchemaBuilder metadataBuilder = SchemaBuilder.struct()
+                .name("com.rentpath.filesource.Metadata")
+                .optional();
+        metadataBuilder.field("path", Schema.STRING_SCHEMA);
+
+        Map<String, Object> metadataValue = new HashMap<>();
+        metadataValue.put("path", metadata.getPath());
+
+        return new SchemaAndValue(metadataBuilder.build(), metadataValue);
+    }
+
+    @Override
+    public Map<String, Object> buildOffset(FileMetadata metadata, Map<String, Object> lastOffset, Offset recordOffset, boolean isLast) {
+        return Collections.singletonMap("offset", recordOffset.getRecordOffset());
     }
 }

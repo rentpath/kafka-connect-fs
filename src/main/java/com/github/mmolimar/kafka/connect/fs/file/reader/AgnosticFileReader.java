@@ -4,7 +4,7 @@ import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.SchemaAndValue;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -26,8 +26,7 @@ public class AgnosticFileReader extends AbstractFileReader<AgnosticFileReader.Ag
     private List<String> parquetExtensions, avroExtensions, sequenceExtensions, delimitedExtensions;
 
     public AgnosticFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws IOException {
-        super(fs, filePath, new AgnosticAdapter(), config);
-
+        super(fs, filePath, config);
         try {
             reader = (AbstractFileReader) readerByExtension(fs, filePath, config);
         } catch (RuntimeException | IOException e) {
@@ -35,6 +34,11 @@ public class AgnosticFileReader extends AbstractFileReader<AgnosticFileReader.Ag
         } catch (Throwable t) {
             throw new IOException("An error has ocurred when creating a concrete reader", t);
         }
+    }
+
+    @Override
+    protected ReaderAdapter<AgnosticRecord> buildAdapter(Map<String, Object> config) {
+        return new AgnosticAdapter();
     }
 
     private FileReader readerByExtension(FileSystem fs, Path filePath, Map<String, Object> config)
@@ -106,7 +110,7 @@ public class AgnosticFileReader extends AbstractFileReader<AgnosticFileReader.Ag
         }
 
         @Override
-        public Struct apply(AgnosticRecord ag) {
+        public SchemaAndValue apply(AgnosticRecord ag) {
             return ag.adapter.apply(ag.record);
         }
     }

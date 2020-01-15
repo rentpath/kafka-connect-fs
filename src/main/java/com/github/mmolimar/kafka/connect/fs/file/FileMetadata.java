@@ -1,16 +1,20 @@
 package com.github.mmolimar.kafka.connect.fs.file;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class FileMetadata {
     private String path;
     private long length;
+    private Map<String,Object> opts;
     private List<BlockInfo> blocks;
 
     public FileMetadata(String path, long length, List<BlockInfo> blocks) {
         this.path = path;
         this.length = length;
         this.blocks = blocks;
+        this.opts = new HashMap<>();
     }
 
     public String getPath() {
@@ -24,6 +28,10 @@ public class FileMetadata {
     public List<BlockInfo> getBlocks() {
         return blocks;
     }
+
+    public Object getOpt(String key) { return opts.get(key); }
+
+    public void setOpt(String key, Object value) { opts.put(key, value); }
 
     @Override
     public String toString() {
