@@ -29,16 +29,14 @@ import static org.junit.Assert.assertTrue;
 
 public class JsonFileReaderTest extends LocalFileReaderTestBase {
     private static final String FILE_EXTENSION = "json";
-    private static Path schemaFile;
 
     @BeforeClass
     public static void setUp() throws IOException {
         readerClass = JsonFileReader.class;
         dataFile = createDataFile();
-        schemaFile = createSchemaFile();
         readerConfig = new HashMap<String, Object>() {{
             put(JsonFileReader.SCHEMA_READER_CLASS, "com.github.mmolimar.kafka.connect.fs.file.reader.schema.FileSchemaReader");
-            put(FileSchemaReader.PATH, schemaFile);
+            put(FileSchemaReader.PATH, createSchemaFile().toString());
         }};
     }
 

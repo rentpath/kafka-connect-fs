@@ -116,8 +116,8 @@ public class FsSourceTask extends SourceTask {
                     //when an exception happens reading a file, the connector continues
                     log.error("Error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
                 }
-                return results;
             }
+            return results;
         }
         return null;
     }

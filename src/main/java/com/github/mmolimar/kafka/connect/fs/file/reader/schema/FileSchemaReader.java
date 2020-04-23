@@ -22,7 +22,7 @@ public class FileSchemaReader implements SchemaReader {
     private FileSystem fs;
 
     public FileSchemaReader(FileSystem fs, Map<String, Object> config) throws IOException {
-        filepath = (Path)config.get(PATH);
+        filepath = new Path((String) config.get(PATH));
         this.fs = fs;
     }
 
