@@ -7,12 +7,14 @@ import java.util.Map;
 public class FileMetadata {
     private String path;
     private long length;
+    private long modTime;
     private Map<String,Object> opts;
     private List<BlockInfo> blocks;
 
-    public FileMetadata(String path, long length, List<BlockInfo> blocks) {
+    public FileMetadata(String path, long length, long modTime, List<BlockInfo> blocks) {
         this.path = path;
         this.length = length;
+        this.modTime = modTime;
         this.blocks = blocks;
         this.opts = new HashMap<>();
     }
@@ -25,6 +27,10 @@ public class FileMetadata {
         return length;
     }
 
+    public long getModTime() {
+        return modTime;
+    }
+
     public List<BlockInfo> getBlocks() {
         return blocks;
     }
@@ -35,7 +41,7 @@ public class FileMetadata {
 
     @Override
     public String toString() {
-        return String.format("[path = %s, length = %s, blocks = %s]", path, length, blocks);
+        return String.format("[path = %s, length = %s, modTime = %s, blocks = %s]", path, length, modTime, blocks);
     }
 
     @Override
@@ -45,8 +51,9 @@ public class FileMetadata {
 
         FileMetadata metadata = (FileMetadata) object;
         if (this.path.equals(metadata.getPath()) &&
-                this.length == metadata.length &&
-                this.blocks.equals(metadata.getBlocks())) {
+            this.length == metadata.length &&
+            this.modTime == metadata.modTime &&
+            this.blocks.equals(metadata.getBlocks())) {
             return true;
         }
         return false;

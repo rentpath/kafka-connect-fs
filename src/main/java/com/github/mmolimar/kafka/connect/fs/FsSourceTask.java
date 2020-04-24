@@ -86,6 +86,13 @@ public class FsSourceTask extends SourceTask {
         return new SchemaAndValue(builder.build(), value);
     }
 
+    // Compare by mod time (falling back to path comparison for equal mod times).
+    private int compareFileMetadata(FileMetadata f1, FileMetadata f2) {
+      if (f1.getModTime() == f2.getModTime())
+          return f1.getPath().compareTo(f2.getPath());
+      return (new Long(f1.getModTime())).compareTo(new Long(f2.getModTime()));
+    }
+
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         while (stop != null && !stop.get() && !policy.hasEnded()) {
@@ -95,6 +102,8 @@ public class FsSourceTask extends SourceTask {
 
             final List<SourceRecord> results = new ArrayList<>();
             List<FileMetadata> files = filesToProcess();
+            // Sort files by last mod time so that we handle older files first.
+            Collections.sort(files, (FileMetadata f1, FileMetadata f2) -> compareFileMetadata(f1, f2));
 
             int count = 0;
             for (FileMetadata metadata : files) {

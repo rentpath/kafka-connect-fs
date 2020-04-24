@@ -200,7 +200,7 @@ public abstract class AbstractPolicy implements Policy {
                         new FileMetadata.BlockInfo(block.getOffset(), block.getLength(), block.isCorrupt()))
                 .collect(Collectors.toList()));
 
-        FileMetadata metadata = new FileMetadata(fileStatus.getPath().toString(), fileStatus.getLen(), blocks);
+        FileMetadata metadata = new FileMetadata(fileStatus.getPath().toString(), fileStatus.getLen(), fileStatus.getModificationTime(), blocks);
         if (opts != null)
             for (String key : opts.keySet())
                 metadata.setOpt(key, opts.get(key));

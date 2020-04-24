@@ -173,6 +173,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
+    // FIXME: take new-style offset into account; there will be no more `paths` submap
     protected boolean shouldOffer(FileMetadata metadata, Map<String, Object> offset) {
         Map<String, Object> paths = (Map<String, Object>) offset.get("paths");
         Map<String, Object> pathOffset = (Map<String, Object>) paths.get(metadata.getPath());
