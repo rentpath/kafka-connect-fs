@@ -14,6 +14,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -278,7 +279,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public SchemaAndValue buildKey(FileMetadata metadata) {
+    public Map<String, Object> buildPartition(FileMetadata metadata) {
         Map<String, Object> value = new HashMap<String, Object>() {
             {
                 put("path", metadata.getPath());
@@ -286,9 +287,20 @@ public abstract class AbstractPolicy implements Policy {
                 //put("blocks", metadata.getBlocks().toString());
             }
         };
+        return value;
+    }
+
+    @Override
+    public SchemaAndValue buildKey(FileMetadata metadata) {
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("path", SchemaBuilder.STRING_SCHEMA);
-        return new SchemaAndValue(builder.build(), value);
+        Schema schema = builder.build();
+
+        Struct value = new Struct(schema);
+        value.put("path", metadata.getPath());
+        //TODO manage blocks
+        //value.put("blocks", metadata.getBlocks().toString());
+        return new SchemaAndValue(schema, value);
     }
 
     @Override
@@ -297,11 +309,12 @@ public abstract class AbstractPolicy implements Policy {
                 .name("com.rentpath.filesource.Metadata")
                 .optional();
         metadataBuilder.field("path", Schema.STRING_SCHEMA);
+        Schema schema = metadataBuilder.build();
 
-        Map<String, Object> metadataValue = new HashMap<>();
+        Struct metadataValue = new Struct(schema);
         metadataValue.put("path", metadata.getPath());
 
-        return new SchemaAndValue(metadataBuilder.build(), metadataValue);
+        return new SchemaAndValue(schema, metadataValue);
     }
 
     @Override

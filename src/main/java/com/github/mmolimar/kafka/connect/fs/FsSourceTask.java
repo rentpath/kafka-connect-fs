@@ -11,6 +11,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -68,22 +69,25 @@ public class FsSourceTask extends SourceTask {
 
     private SchemaAndValue appendMetadata(SchemaAndValue source, FileMetadata metadata, boolean isLast) {
         Schema sourceSchema = source.schema();
-        Map<String, Object> sourceValue = (Map<String, Object>) source.value();
+        Struct sourceValue = (Struct) source.value();
         SchemaBuilder builder = SchemaBuilder.struct()
                 .name(sourceSchema.name())
                 .optional();
         for (Field field : sourceSchema.fields()) {
             builder.field(field.name(), field.schema());
         }
-        Map<String, Object> value = new HashMap<>();
+
+        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, isLast);
+        builder.field("_file_metadata", policyMetadata.schema());
+        Schema schema = builder.build();
+
+        Struct value = new Struct(schema);
         for (Field field : sourceSchema.fields()) {
             value.put(field.name(), sourceValue.get(field.name()));
         }
 
-        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, isLast);
-        builder.field("_file_metadata", policyMetadata.schema());
         value.put("_file_metadata", policyMetadata.value());
-        return new SchemaAndValue(builder.build(), value);
+        return new SchemaAndValue(schema, value);
     }
 
     // Compare by mod time (falling back to path comparison for equal mod times).
@@ -107,16 +111,17 @@ public class FsSourceTask extends SourceTask {
 
             int count = 0;
             for (FileMetadata metadata : files) {
-                SchemaAndValue key = policy.buildKey(metadata);
-                Map<String, Object> lastOffset = context.offsetStorageReader().offset((Map<String, Object>) key.value());
+                Map<String, Object> lastOffset = context.offsetStorageReader().offset(policy.buildPartition(metadata));
                 try (FileReader reader = policy.offer(metadata, lastOffset)) {
                     if (reader != null) {
                         while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
                             log.info("Processing records for file {}", metadata);
                             SchemaAndValue sAndV = reader.next();
+                            log.info("reader.next {}", sAndV); // FIXME del
                             boolean isLast = !reader.hasNext();
                             if (config.getIncludeMetadata())
                                 sAndV = appendMetadata(sAndV, metadata, isLast);
+                            log.info("post-appendMetadata {}", sAndV); // FIXME del
                             results.add(convert(metadata, policy, lastOffset, reader.currentOffset(), sAndV, isLast));
                             count++;
                         }
@@ -148,17 +153,17 @@ public class FsSourceTask extends SourceTask {
         return StreamSupport.stream(iterable.spliterator(), false);
     }
 
-    private SourceRecord convert(FileMetadata metadata, Policy policy, Map<String, Object> lastOffset, Offset recordOffset, SchemaAndValue snv, boolean isLast) {
-        SchemaAndValue key = policy.buildKey(metadata);
-        Map<String, Object> value = (Map<String, Object>) key.value();
+    private SourceRecord convert(FileMetadata metadata, Policy policy, Map<String, Object> lastOffset, Offset recordOffset, SchemaAndValue snvValue, boolean isLast) {
+        SchemaAndValue snvKey = policy.buildKey(metadata);
+        log.info("convert snvKey.schema={} snvKey.value={} snvValue.schema={} snvValue.value={}", snvKey.schema(), snvKey.value(), snvValue.schema(), snvValue.value()); // FIXME del
         return new SourceRecord(
-                value,
+                policy.buildPartition(metadata),
                 policy.buildOffset(metadata, lastOffset, recordOffset, isLast),
                 config.getTopic(),
-                key.schema(),
-                value,
-                snv.schema(),
-                snv.value()
+                snvKey.schema(),
+                snvKey.value(),
+                snvValue.schema(),
+                snvValue.value()
         );
     }
 
