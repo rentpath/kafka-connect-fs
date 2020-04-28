@@ -108,6 +108,7 @@ public class FsSourceTask extends SourceTask {
             List<FileMetadata> files = filesToProcess();
             // Sort files by last mod time so that we handle older files first.
             Collections.sort(files, (FileMetadata f1, FileMetadata f2) -> compareFileMetadata(f1, f2));
+            log.info("sorted files={}", files); // FIXME del
 
             int count = 0;
             for (FileMetadata metadata : files) {

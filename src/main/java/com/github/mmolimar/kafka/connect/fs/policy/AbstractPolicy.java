@@ -135,7 +135,8 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern) {
-        return (fileStatus.isFile() && pattern.matcher(fileStatus.getPath().getName()).find());
+        log.info("in shouldInclude fileStatus={} path={} pattern={} matches?={}", fileStatus, fileStatus.getPath().toString(), pattern, pattern.matcher(fileStatus.getPath().toString()).find()); // FIXME del
+        return (fileStatus.isFile() && pattern.matcher(fileStatus.getPath().toString()).find());
     }
 
     protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Map<String, Object> opts) throws IOException {
@@ -222,6 +223,7 @@ public abstract class AbstractPolicy implements Policy {
 
     @Override
     public FileReader offer(FileMetadata metadata, Map<String, Object> lastOffset) throws IOException {
+        log.info("calling shouldOffer with metadata={} lastOffset={} return={}", metadata, lastOffset, shouldOffer(metadata, lastOffset)); // FIXME del
         if (!shouldOffer(metadata, lastOffset))
             return null;
 

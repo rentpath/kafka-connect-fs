@@ -84,11 +84,13 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         }
         for (WatchedPattern pattern : watchedPatterns) {
             if (pattern.incrementalFilePattern != null)
+                log.info("BulkIncrementalPolicy.listFiles incremental pattern={}", pattern.incrementalFilePattern); // FIXME del
                 iterator = concat(iterator, buildFileIterator(fs, pattern.incrementalFilePattern, new HashMap<String, Object>() {{
                     put(BULK_OPT, false);
                     put(WATCH_KEY_OPT, pattern.key);
                 }}));
         }
+        log.info("BulkIncrementalPolicy.listFiles iterator={}", iterator); // FIXME del
         return iterator;
     }
 
@@ -99,6 +101,8 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
 
     @Override
     public FileReader seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
+        log.info("seekReader metadata={} offset={}", metadata, offset); // FIXME del
+/*
         if (offset != null && offset.get("timestamp") != null && offset.get("path") != null) {
             Long timestamp = ((Long) offset.get("timestamp"));
             if (timestamp == lastRead && offset.get("offset") != null) {
@@ -107,6 +111,10 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
                 else
                     return null;
             }
+        }
+*/
+        if (offset != null && offset.get("offset") != null && metadata.getPath().equals(offset.get("path"))) {
+            reader.seek(() -> (Long) offset.get("offset"));
         }
         return reader;
     }
@@ -173,13 +181,11 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
 
     @Override
     protected boolean shouldOffer(FileMetadata metadata, Map<String, Object> offset) {
-        log.info("shouldOffer metadata={} offset={}", metadata, offset); // FIXME del
+        // Note that when the connector is first run, the offset will be null.
         if (offset == null) return true;
+
         if (metadata.getPath().equals((String) offset.get("path"))) {
-          // FIXME: make sure this is correct; consider off-by-one and the possibility of having read a file before the write finished (partial record)
-          // Actually this is definitely NOT correct!
-          // The offset value isn't bytes but records (or perhaps lines). Maybe need some way to track isLast/finished for a file after all...
-          return metadata.getLen() > (long) offset.get("offset");
+          return true;
         }
         return (metadata.getModTime() > (long) offset.get("lastMod")) ||
                ((metadata.getModTime() == (long) offset.get("lastMod")) &&
