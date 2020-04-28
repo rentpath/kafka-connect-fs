@@ -67,7 +67,7 @@ public class FsSourceTask extends SourceTask {
         stop = new AtomicBoolean(false);
     }
 
-    private SchemaAndValue appendMetadata(SchemaAndValue source, FileMetadata metadata, boolean isLast) {
+    private SchemaAndValue appendMetadata(SchemaAndValue source, FileMetadata metadata, long offset, boolean isLast) {
         Schema sourceSchema = source.schema();
         Struct sourceValue = (Struct) source.value();
         SchemaBuilder builder = SchemaBuilder.struct()
@@ -77,7 +77,7 @@ public class FsSourceTask extends SourceTask {
             builder.field(field.name(), field.schema());
         }
 
-        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, isLast);
+        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, offset, isLast);
         builder.field("_file_metadata", policyMetadata.schema());
         Schema schema = builder.build();
 
@@ -119,9 +119,10 @@ public class FsSourceTask extends SourceTask {
                             log.info("Processing records for file {}", metadata);
                             SchemaAndValue sAndV = reader.next();
                             log.info("reader.next {}", sAndV); // FIXME del
+                            long recordOffset = reader.currentOffset().getRecordOffset();
                             boolean isLast = !reader.hasNext();
                             if (config.getIncludeMetadata())
-                                sAndV = appendMetadata(sAndV, metadata, isLast);
+                                sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast);
                             log.info("post-appendMetadata {}", sAndV); // FIXME del
                             results.add(convert(metadata, policy, lastOffset, reader.currentOffset(), sAndV, isLast));
                             count++;

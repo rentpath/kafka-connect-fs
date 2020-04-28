@@ -102,17 +102,6 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     @Override
     public FileReader seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
         log.info("seekReader metadata={} offset={}", metadata, offset); // FIXME del
-/*
-        if (offset != null && offset.get("timestamp") != null && offset.get("path") != null) {
-            Long timestamp = ((Long) offset.get("timestamp"));
-            if (timestamp == lastRead && offset.get("offset") != null) {
-                if (metadata.getPath().equals(offset.get("path")))
-                    reader.seek(() -> (Long) offset.get("offset"));
-                else
-                    return null;
-            }
-        }
-*/
         if (offset != null && offset.get("offset") != null && metadata.getPath().equals(offset.get("path"))) {
             reader.seek(() -> (Long) offset.get("offset"));
         }
@@ -148,19 +137,21 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         return new SchemaAndValue(schema, value);
     }
 
-    // FIXME: Is this really the metadata we want?
+    // FIXME: Add a new flag: `first` (similar to last); true for first record in file.
     @Override
-    public SchemaAndValue buildMetadata(FileMetadata metadata, boolean isLast) {
+    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
                 .name("com.rentpath.filesource.WatcherMetadata")
                 .optional();
         metadataBuilder.field("path", Schema.STRING_SCHEMA);
+        metadataBuilder.field("offset", Schema.INT64_SCHEMA);
         metadataBuilder.field("last", Schema.BOOLEAN_SCHEMA);
         metadataBuilder.field("bulk", Schema.BOOLEAN_SCHEMA);
         Schema schema = metadataBuilder.build();
 
         Struct metadataValue = new Struct(schema);
         metadataValue.put("path", metadata.getPath());
+        metadataValue.put("offset", offset);
         metadataValue.put("last", isLast);
         metadataValue.put("bulk", (Boolean) metadata.getOpt(BULK_OPT));
 
