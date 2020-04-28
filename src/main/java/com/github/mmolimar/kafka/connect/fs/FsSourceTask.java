@@ -124,7 +124,7 @@ public class FsSourceTask extends SourceTask {
                             if (config.getIncludeMetadata())
                                 sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast);
                             log.info("post-appendMetadata {}", sAndV); // FIXME del
-                            results.add(convert(metadata, policy, lastOffset, reader.currentOffset(), sAndV, isLast));
+                            results.add(convert(metadata, policy, reader.currentOffset(), sAndV));
                             count++;
                         }
                     }
@@ -155,12 +155,12 @@ public class FsSourceTask extends SourceTask {
         return StreamSupport.stream(iterable.spliterator(), false);
     }
 
-    private SourceRecord convert(FileMetadata metadata, Policy policy, Map<String, Object> lastOffset, Offset recordOffset, SchemaAndValue snvValue, boolean isLast) {
+    private SourceRecord convert(FileMetadata metadata, Policy policy, Offset recordOffset, SchemaAndValue snvValue) {
         SchemaAndValue snvKey = policy.buildKey(metadata);
         log.info("convert snvKey.schema={} snvKey.value={} snvValue.schema={} snvValue.value={}", snvKey.schema(), snvKey.value(), snvValue.schema(), snvValue.value()); // FIXME del
         return new SourceRecord(
                 policy.buildPartition(metadata),
-                policy.buildOffset(metadata, lastOffset, recordOffset, isLast),
+                policy.buildOffset(metadata, recordOffset),
                 config.getTopic(),
                 snvKey.schema(),
                 snvKey.value(),

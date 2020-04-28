@@ -137,7 +137,6 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         return new SchemaAndValue(schema, value);
     }
 
-    // FIXME: Add a new flag: `first` (similar to last); true for first record in file.
     @Override
     public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
@@ -158,9 +157,8 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         return new SchemaAndValue(schema, metadataValue);
     }
 
-    // FIXME: do we really need to pass lastOffset and isLast ???
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, Map<String, Object> lastOffset, Offset recordOffset, boolean isLast) {
+    public Map<String, Object> buildOffset(FileMetadata metadata, Offset recordOffset) {
         return new HashMap<String, Object>() {
             {
                 put("path", metadata.getPath());
