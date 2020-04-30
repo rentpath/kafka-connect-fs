@@ -158,12 +158,12 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, Offset recordOffset) {
+    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset) {
         return new HashMap<String, Object>() {
             {
                 put("path", metadata.getPath());
                 put("lastMod", metadata.getModTime());
-                put("offset", recordOffset.getRecordOffset());
+                put("offset", recordOffset);
             }
         };
     }

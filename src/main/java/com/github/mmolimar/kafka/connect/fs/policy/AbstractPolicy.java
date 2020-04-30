@@ -320,7 +320,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, Offset recordOffset) {
-        return Collections.singletonMap("offset", recordOffset.getRecordOffset());
+    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset) {
+        return Collections.singletonMap("offset", recordOffset);
     }
 }

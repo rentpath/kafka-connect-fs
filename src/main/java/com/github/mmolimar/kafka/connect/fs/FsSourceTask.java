@@ -32,6 +32,7 @@ public class FsSourceTask extends SourceTask {
     private FsSourceTaskConfig config;
     private Policy policy;
     private long maxBatchSize;
+    private boolean firstPoll;
 
     @Override
     public String version() {
@@ -40,6 +41,7 @@ public class FsSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> properties) {
+        firstPoll = true;
         try {
             config = new FsSourceTaskConfig(properties);
             maxBatchSize = config.getLong(FsSourceTaskConfig.MAX_BATCH_SIZE);
@@ -100,8 +102,10 @@ public class FsSourceTask extends SourceTask {
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         while (stop != null && !stop.get() && !policy.hasEnded()) {
-            if (config.getPollIntervalMs() > 0)
+            if ((config.getPollIntervalMs() > 0) && !firstPoll) {
                 Thread.sleep(config.getPollIntervalMs());
+            }
+            firstPoll = false;
             log.trace("Polling for new data");
 
             final List<SourceRecord> results = new ArrayList<>();
@@ -117,14 +121,15 @@ public class FsSourceTask extends SourceTask {
                     if (reader != null) {
                         while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
                             log.info("Processing records for file {}", metadata);
-                            SchemaAndValue sAndV = reader.next();
-                            log.info("reader.next {}", sAndV); // FIXME del
                             long recordOffset = reader.currentOffset().getRecordOffset();
+                            log.info("recordOffset={}", recordOffset); // FIXME del
+                            SchemaAndValue sAndV = reader.next();
+                            //log.info("reader.next {}", sAndV); // FIXME del
                             boolean isLast = !reader.hasNext();
                             if (config.getIncludeMetadata())
                                 sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast);
-                            log.info("post-appendMetadata {}", sAndV); // FIXME del
-                            results.add(convert(metadata, policy, reader.currentOffset(), sAndV));
+                            //log.info("post-appendMetadata {}", sAndV); // FIXME del
+                            results.add(convert(metadata, policy, recordOffset, sAndV));
                             count++;
                         }
                     }
@@ -155,7 +160,7 @@ public class FsSourceTask extends SourceTask {
         return StreamSupport.stream(iterable.spliterator(), false);
     }
 
-    private SourceRecord convert(FileMetadata metadata, Policy policy, Offset recordOffset, SchemaAndValue snvValue) {
+    private SourceRecord convert(FileMetadata metadata, Policy policy, long recordOffset, SchemaAndValue snvValue) {
         SchemaAndValue snvKey = policy.buildKey(metadata);
         log.info("convert snvKey.schema={} snvKey.value={} snvValue.schema={} snvValue.value={}", snvKey.schema(), snvKey.value(), snvValue.schema(), snvValue.value()); // FIXME del
         return new SourceRecord(
