@@ -283,8 +283,6 @@ public abstract class AbstractPolicy implements Policy {
         Map<String, Object> value = new HashMap<String, Object>() {
             {
                 put("path", metadata.getPath());
-                //TODO manage blocks
-                //put("blocks", metadata.getBlocks().toString());
             }
         };
         return value;
@@ -298,8 +296,6 @@ public abstract class AbstractPolicy implements Policy {
 
         Struct value = new Struct(schema);
         value.put("path", metadata.getPath());
-        //TODO manage blocks
-        //value.put("blocks", metadata.getBlocks().toString());
         return new SchemaAndValue(schema, value);
     }
 
