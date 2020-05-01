@@ -33,6 +33,7 @@ public class FsSourceTask extends SourceTask {
     private Policy policy;
     private long maxBatchSize;
     private boolean firstPoll;
+    private Map<Object, Object> offsets;
 
     @Override
     public String version() {
@@ -42,6 +43,7 @@ public class FsSourceTask extends SourceTask {
     @Override
     public void start(Map<String, String> properties) {
         firstPoll = true;
+        offsets = new HashMap<Object, Object>();
         try {
             config = new FsSourceTaskConfig(properties);
             maxBatchSize = config.getLong(FsSourceTaskConfig.MAX_BATCH_SIZE);
@@ -99,6 +101,15 @@ public class FsSourceTask extends SourceTask {
       return (new Long(f1.getModTime())).compareTo(new Long(f2.getModTime()));
     }
 
+    private Map<String, Object> getOffset(Map<String, Object> partition) {
+        Map<String, Object> offset = (Map<String, Object>) offsets.get(partition);
+        if(offset == null) {
+            offset = context.offsetStorageReader().offset(partition);
+            offsets.put(partition, offset);
+        }
+        return offset;
+    }
+
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         while (stop != null && !stop.get() && !policy.hasEnded()) {
@@ -115,7 +126,8 @@ public class FsSourceTask extends SourceTask {
 
             int count = 0;
             for (FileMetadata metadata : files) {
-                Map<String, Object> lastOffset = context.offsetStorageReader().offset(policy.buildPartition(metadata));
+                Map<String, Object> partition = policy.buildPartition(metadata);
+                Map<String, Object> lastOffset = getOffset(partition);
                 try (FileReader reader = policy.offer(metadata, lastOffset)) {
                     if (reader != null) {
                         while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
@@ -125,7 +137,9 @@ public class FsSourceTask extends SourceTask {
                             boolean isLast = !reader.hasNext();
                             if (config.getIncludeMetadata())
                                 sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast);
-                            results.add(convert(metadata, policy, recordOffset, sAndV));
+                            Map<String, Object> offset = policy.buildOffset(metadata, recordOffset);
+                            results.add(convert(metadata, policy, partition, offset, sAndV));
+                            offsets.put(partition, offset);
                             count++;
                         }
                     }
@@ -156,16 +170,16 @@ public class FsSourceTask extends SourceTask {
         return StreamSupport.stream(iterable.spliterator(), false);
     }
 
-    private SourceRecord convert(FileMetadata metadata, Policy policy, long recordOffset, SchemaAndValue snvValue) {
+    private SourceRecord convert(FileMetadata metadata, Policy policy, Map<String, Object> partition, Map<String, Object> offset, SchemaAndValue snvValue) {
         SchemaAndValue snvKey = policy.buildKey(metadata);
         return new SourceRecord(
-                policy.buildPartition(metadata),
-                policy.buildOffset(metadata, recordOffset),
-                config.getTopic(),
-                snvKey.schema(),
-                snvKey.value(),
-                snvValue.schema(),
-                snvValue.value()
+            partition,
+            offset,
+            config.getTopic(),
+            snvKey.schema(),
+            snvKey.value(),
+            snvValue.schema(),
+            snvValue.value()
         );
     }
 
