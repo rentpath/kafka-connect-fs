@@ -9,6 +9,7 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,14 +99,8 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
 
     @Override
     public FileReader seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
-        if (offset != null && offset.get("timestamp") != null && offset.get("path") != null) {
-            Long timestamp = ((Long) offset.get("timestamp"));
-            if (timestamp == lastRead && offset.get("offset") != null) {
-                if (metadata.getPath().equals(offset.get("path")))
-                    reader.seek(() -> (Long) offset.get("offset"));
-                else
-                    return null;
-            }
+        if (offset != null && offset.get("offset") != null && metadata.getPath().equals(offset.get("path"))) {
+            reader.seek(() -> (Long) offset.get("offset"));
         }
         return reader;
     }
@@ -117,69 +112,70 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
+    public Map<String, Object> buildPartition(FileMetadata metadata) {
+        Map<String, Object> value = new HashMap<String, Object>();
+        value.put(WATCH_KEY_OPT, metadata.getOpt(WATCH_KEY_OPT));
+        return value;
+    }
+
+    @Override
     public SchemaAndValue buildKey(FileMetadata metadata) {
         // build schema
         SchemaBuilder builder = SchemaBuilder.struct()
                 .name("com.rentpath.filesource.WatchPolicyKey")
                 .optional();
         builder.field(WATCH_KEY_OPT, Schema.STRING_SCHEMA);
+        Schema schema = builder.build();
 
         // build value
-        Map<String, Object> value = new HashMap<String, Object>();
+        Struct value = new Struct(schema);
         value.put(WATCH_KEY_OPT, metadata.getOpt(WATCH_KEY_OPT));
 
-        return new SchemaAndValue(builder.build(), value);
+        return new SchemaAndValue(schema, value);
     }
 
     @Override
-    public SchemaAndValue buildMetadata(FileMetadata metadata, boolean isLast) {
+    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
                 .name("com.rentpath.filesource.WatcherMetadata")
                 .optional();
         metadataBuilder.field("path", Schema.STRING_SCHEMA);
+        metadataBuilder.field("offset", Schema.INT64_SCHEMA);
         metadataBuilder.field("last", Schema.BOOLEAN_SCHEMA);
         metadataBuilder.field("bulk", Schema.BOOLEAN_SCHEMA);
+        Schema schema = metadataBuilder.build();
 
-        Map<String, Object> metadataValue = new HashMap<>();
+        Struct metadataValue = new Struct(schema);
         metadataValue.put("path", metadata.getPath());
+        metadataValue.put("offset", offset);
         metadataValue.put("last", isLast);
         metadataValue.put("bulk", (Boolean) metadata.getOpt(BULK_OPT));
 
-        return new SchemaAndValue(metadataBuilder.build(), metadataValue);
+        return new SchemaAndValue(schema, metadataValue);
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, Map<String, Object> lastOffset, Offset recordOffset, boolean isLast) {
-        Boolean isBulk = (Boolean) (metadata.getOpt(BULK_OPT));
-        Map<String, Object> updated = new HashMap<>();
-        if (!isBulk || (Boolean) (lastOffset.get("bulk"))) {
-            Map<String, Object> last = ((Map<String, Object>) lastOffset.get("paths"));
-            for (String path : last.keySet()) {
-                updated.put(path, last.get(path));
-            }
-        }
-        Map<String, Object> current = new HashMap<>();
-        current.put("offset", recordOffset.getRecordOffset());
-        current.put("finished", isLast);
-        updated.put(metadata.getPath(), current);
-
+    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset) {
         return new HashMap<String, Object>() {
             {
-                put("bulk", isBulk);
-                put("timestamp", lastRead);
-                put("paths", updated);
+                put("path", metadata.getPath());
+                put("lastMod", metadata.getModTime());
+                put("offset", recordOffset);
             }
         };
     }
 
     @Override
     protected boolean shouldOffer(FileMetadata metadata, Map<String, Object> offset) {
-        Map<String, Object> paths = (Map<String, Object>) offset.get("paths");
-        Map<String, Object> pathOffset = (Map<String, Object>) paths.get(metadata.getPath());
-        if ((Boolean) pathOffset.get("finished"))
-            return false;
-        return true;
-    }
+        // Note that when the connector is first run, the offset will be null.
+        if (offset == null) return true;
+
+        if (metadata.getPath().equals((String) offset.get("path"))) {
+          return true;
+        }
+        return (metadata.getModTime() > (long) offset.get("lastMod")) ||
+               ((metadata.getModTime() == (long) offset.get("lastMod")) &&
+                ((metadata.getPath().compareTo((String) offset.get("path"))) > 0)); }
 
     class WatchedPattern {
         String key;

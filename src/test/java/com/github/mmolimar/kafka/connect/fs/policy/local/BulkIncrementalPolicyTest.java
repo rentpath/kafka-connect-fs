@@ -41,7 +41,7 @@ public class BulkIncrementalPolicyTest extends LocalPolicyTestBase {
             put(FsSourceTaskConfig.POLICY_PREFIX_FS + "dfs.data.dir", "test");
             put(FsSourceTaskConfig.POLICY_PREFIX_FS + "fs.default.name", "test");
             put(BulkIncrementalPolicy.WATCHER_POLICY_WATCH_FILEPATH, watchFile.getAbsolutePath());
-            put(BulkIncrementalPolicy.WATCHER_POLICY_WATCH_PATTERNS, "someKey:^[0-9]*\\.txt$");
+            put(BulkIncrementalPolicy.WATCHER_POLICY_WATCH_PATTERNS, "someKey:\\/[0-9]*\\.txt$");
         }};
 
         taskConfig = new FsSourceTaskConfig(cfg);

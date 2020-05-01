@@ -14,6 +14,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -134,7 +135,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern) {
-        return (fileStatus.isFile() && pattern.matcher(fileStatus.getPath().getName()).find());
+        return (fileStatus.isFile() && pattern.matcher(fileStatus.getPath().toString()).find());
     }
 
     protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Map<String, Object> opts) throws IOException {
@@ -200,7 +201,7 @@ public abstract class AbstractPolicy implements Policy {
                         new FileMetadata.BlockInfo(block.getOffset(), block.getLength(), block.isCorrupt()))
                 .collect(Collectors.toList()));
 
-        FileMetadata metadata = new FileMetadata(fileStatus.getPath().toString(), fileStatus.getLen(), blocks);
+        FileMetadata metadata = new FileMetadata(fileStatus.getPath().toString(), fileStatus.getLen(), fileStatus.getModificationTime(), blocks);
         if (opts != null)
             for (String key : opts.keySet())
                 metadata.setOpt(key, opts.get(key));
@@ -278,34 +279,42 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public SchemaAndValue buildKey(FileMetadata metadata) {
+    public Map<String, Object> buildPartition(FileMetadata metadata) {
         Map<String, Object> value = new HashMap<String, Object>() {
             {
                 put("path", metadata.getPath());
-                //TODO manage blocks
-                //put("blocks", metadata.getBlocks().toString());
             }
         };
-        SchemaBuilder builder = SchemaBuilder.struct();
-        builder.field("path", SchemaBuilder.STRING_SCHEMA);
-        return new SchemaAndValue(builder.build(), value);
+        return value;
     }
 
     @Override
-    public SchemaAndValue buildMetadata(FileMetadata metadata, boolean isLast) {
+    public SchemaAndValue buildKey(FileMetadata metadata) {
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("path", SchemaBuilder.STRING_SCHEMA);
+        Schema schema = builder.build();
+
+        Struct value = new Struct(schema);
+        value.put("path", metadata.getPath());
+        return new SchemaAndValue(schema, value);
+    }
+
+    @Override
+    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
                 .name("com.rentpath.filesource.Metadata")
                 .optional();
         metadataBuilder.field("path", Schema.STRING_SCHEMA);
+        Schema schema = metadataBuilder.build();
 
-        Map<String, Object> metadataValue = new HashMap<>();
+        Struct metadataValue = new Struct(schema);
         metadataValue.put("path", metadata.getPath());
 
-        return new SchemaAndValue(metadataBuilder.build(), metadataValue);
+        return new SchemaAndValue(schema, metadataValue);
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, Map<String, Object> lastOffset, Offset recordOffset, boolean isLast) {
-        return Collections.singletonMap("offset", recordOffset.getRecordOffset());
+    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset) {
+        return Collections.singletonMap("offset", recordOffset);
     }
 }
