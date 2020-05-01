@@ -84,13 +84,11 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         }
         for (WatchedPattern pattern : watchedPatterns) {
             if (pattern.incrementalFilePattern != null)
-                log.info("BulkIncrementalPolicy.listFiles incremental pattern={}", pattern.incrementalFilePattern); // FIXME del
                 iterator = concat(iterator, buildFileIterator(fs, pattern.incrementalFilePattern, new HashMap<String, Object>() {{
                     put(BULK_OPT, false);
                     put(WATCH_KEY_OPT, pattern.key);
                 }}));
         }
-        log.info("BulkIncrementalPolicy.listFiles iterator={}", iterator); // FIXME del
         return iterator;
     }
 
@@ -101,7 +99,6 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
 
     @Override
     public FileReader seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
-        log.info("seekReader metadata={} offset={}", metadata, offset); // FIXME del
         if (offset != null && offset.get("offset") != null && metadata.getPath().equals(offset.get("path"))) {
             reader.seek(() -> (Long) offset.get("offset"));
         }

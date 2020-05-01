@@ -112,7 +112,6 @@ public class FsSourceTask extends SourceTask {
             List<FileMetadata> files = filesToProcess();
             // Sort files by last mod time so that we handle older files first.
             Collections.sort(files, (FileMetadata f1, FileMetadata f2) -> compareFileMetadata(f1, f2));
-            log.info("sorted files={}", files); // FIXME del
 
             int count = 0;
             for (FileMetadata metadata : files) {
@@ -122,13 +121,10 @@ public class FsSourceTask extends SourceTask {
                         while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
                             log.info("Processing records for file {}", metadata);
                             long recordOffset = reader.currentOffset().getRecordOffset();
-                            log.info("recordOffset={}", recordOffset); // FIXME del
                             SchemaAndValue sAndV = reader.next();
-                            //log.info("reader.next {}", sAndV); // FIXME del
                             boolean isLast = !reader.hasNext();
                             if (config.getIncludeMetadata())
                                 sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast);
-                            //log.info("post-appendMetadata {}", sAndV); // FIXME del
                             results.add(convert(metadata, policy, recordOffset, sAndV));
                             count++;
                         }
@@ -162,7 +158,6 @@ public class FsSourceTask extends SourceTask {
 
     private SourceRecord convert(FileMetadata metadata, Policy policy, long recordOffset, SchemaAndValue snvValue) {
         SchemaAndValue snvKey = policy.buildKey(metadata);
-        log.info("convert snvKey.schema={} snvKey.value={} snvValue.schema={} snvValue.value={}", snvKey.schema(), snvKey.value(), snvValue.schema(), snvValue.value()); // FIXME del
         return new SourceRecord(
                 policy.buildPartition(metadata),
                 policy.buildOffset(metadata, recordOffset),
