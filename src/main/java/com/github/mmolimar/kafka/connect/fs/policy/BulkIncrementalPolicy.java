@@ -135,7 +135,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
-    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast) {
+    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
                 .name("com.rentpath.filesource.WatcherMetadata")
                 .optional();
@@ -144,6 +144,8 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         metadataBuilder.field("last", Schema.BOOLEAN_SCHEMA);
         metadataBuilder.field("bulk", Schema.BOOLEAN_SCHEMA);
         metadataBuilder.field("watchKey", Schema.STRING_SCHEMA);
+        metadataBuilder.field("bulkPath", Schema.STRING_SCHEMA);
+        metadataBuilder.field("priorBulkPath", Schema.OPTIONAL_STRING_SCHEMA); // will be null for the very first bulk file we ingest for a given watch key
         Schema schema = metadataBuilder.build();
 
         Struct metadataValue = new Struct(schema);
@@ -152,19 +154,32 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         metadataValue.put("last", isLast);
         metadataValue.put("bulk", (Boolean) metadata.getOpt(BULK_OPT));
         metadataValue.put("watchKey", (String) metadata.getOpt(WATCH_KEY_OPT));
+        metadataValue.put("bulkPath", (String) connectorOffset.get("bulkPath"));
+        metadataValue.put("priorBulkPath", (String) connectorOffset.get("priorBulkPath"));
 
         return new SchemaAndValue(schema, metadataValue);
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset) {
-        return new HashMap<String, Object>() {
-            {
-                put("path", metadata.getPath());
-                put("lastMod", metadata.getModTime());
-                put("offset", recordOffset);
+    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset, Map<String, Object> priorOffset) {
+        HashMap<String, Object> result = new HashMap<String, Object>();
+        result.put("path", metadata.getPath());
+        result.put("lastMod", metadata.getModTime());
+        result.put("offset", recordOffset);
+        // The following values aren't needed for resuming reading where we left off.
+        // Rather they are for use in appended metadata (for consumption by a downstream processor).
+        if((recordOffset == 1L) && (Boolean) metadata.getOpt(BULK_OPT)) {
+            result.put("bulkPath", metadata.getPath());
+            if(priorOffset == null) {
+                result.put("priorBulkPath", null);
+            } else {
+                result.put("priorBulkPath", (String) priorOffset.get("bulkPath"));
             }
-        };
+        } else {
+            result.put("bulkPath", (String) priorOffset.get("bulkPath"));
+            result.put("priorBulkPath", (String) priorOffset.get("priorBulkPath"));
+        }
+        return result;
     }
 
     @Override
