@@ -143,6 +143,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         metadataBuilder.field("offset", Schema.INT64_SCHEMA);
         metadataBuilder.field("last", Schema.BOOLEAN_SCHEMA);
         metadataBuilder.field("bulk", Schema.BOOLEAN_SCHEMA);
+        metadataBuilder.field("watchKey", Schema.STRING_SCHEMA);
         Schema schema = metadataBuilder.build();
 
         Struct metadataValue = new Struct(schema);
@@ -150,6 +151,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         metadataValue.put("offset", offset);
         metadataValue.put("last", isLast);
         metadataValue.put("bulk", (Boolean) metadata.getOpt(BULK_OPT));
+        metadataValue.put("watchKey", (String) metadata.getOpt(WATCH_KEY_OPT));
 
         return new SchemaAndValue(schema, metadataValue);
     }
