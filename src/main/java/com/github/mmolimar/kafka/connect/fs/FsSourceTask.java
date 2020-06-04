@@ -160,7 +160,7 @@ public class FsSourceTask extends SourceTask {
             return asStream(policy.execute())
                     .filter(metadata -> metadata.getLen() > 0)
                     .collect(Collectors.toList());
-        } catch (IOException | ConnectException e) {
+        } catch (IOException | RuntimeException e) {
             //when an exception happens executing the policy, the connector continues
             log.error("Cannot retrieve files to process from FS: " + policy.getURIs() + ". Keep going...", e);
             return Collections.EMPTY_LIST;
