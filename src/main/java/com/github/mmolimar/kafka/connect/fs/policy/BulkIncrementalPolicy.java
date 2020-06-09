@@ -2,7 +2,6 @@ package com.github.mmolimar.kafka.connect.fs.policy;
 
 import com.github.mmolimar.kafka.connect.fs.FsSourceTaskConfig;
 import com.github.mmolimar.kafka.connect.fs.file.FileMetadata;
-import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -17,25 +16,36 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class BulkIncrementalPolicy extends AbstractPolicy {
     public static final String WATCHER_POLICY_PREFIX = FsSourceTaskConfig.POLICY_PREFIX + "watcher.";
     public static final String WATCHER_POLICY_WATCH_FILEPATH = WATCHER_POLICY_PREFIX + "watch.filepath";
     public static final String WATCHER_POLICY_WATCH_PATTERNS = WATCHER_POLICY_PREFIX + "watch.patterns";
+    public static final String WATCHER_POLICY_EXCLUSION_PATTERN = WATCHER_POLICY_PREFIX + "exclusion.pattern";
+    public static final String WATCHER_POLICY_BATCH_ID_EXTRACTION_PATTERN = WATCHER_POLICY_PREFIX + "batch.id.extraction.pattern";
+    public static final String WATCHER_POLICY_BATCH_ID_EXTRACTION_INDEX = WATCHER_POLICY_PREFIX + "batch.id.extraction.index";
 
+    private static final String PATH_OPT = "path";
+    private static final String OFFSET_OPT = "offset";
+    private static final String LAST_OPT = "last";
+    private static final String LAST_MOD_OPT = "last";
     private static final String WATCH_KEY_OPT = "watchKey";
     private static final String BULK_OPT = "bulk";
     private static final String WATCH_PATTERN_DELINEATOR = ":::";
     private static final String WATCH_PATTERN_PART_DELINEATOR = ":";
+    private static final String BATCH_ID_OPT = "batchId";
+    private static final String PRIOR_BATCH_ID_OPT = "priorBatchId";
+    private static final String WATCHER_METADATA_TYPE = "com.rentpath.filesource.WatcherMetadata";
 
     private File watchFile;
-    private Pattern offsetKeySearchPattern;
-    private String offsetKeyReplacement;
+    private Pattern batchIdExtractionPattern;
+    private Pattern exclusionPattern;
+    private int batchIdExtractionIndex;
     private List<WatchedPattern> watchedPatterns;
     private long lastRead;
-
-    private final Logger log = LoggerFactory.getLogger(getClass());
 
     public BulkIncrementalPolicy(FsSourceTaskConfig conf) throws IOException {
         super(conf);
@@ -44,6 +54,18 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     @Override
     protected void configPolicy(Map<String, Object> customConfigs) {
         watchFile = new File((String) customConfigs.get(WATCHER_POLICY_WATCH_FILEPATH));
+        String batchIdExtractionPatternStr = (String) customConfigs.get(WATCHER_POLICY_BATCH_ID_EXTRACTION_PATTERN);
+        if (batchIdExtractionPatternStr == null)
+            throw new ConnectException("Batch id extraction pattern not specified!");
+        batchIdExtractionPattern = Pattern.compile(batchIdExtractionPatternStr);
+        String batchIdExtractionIndexStr = (String) customConfigs.get(WATCHER_POLICY_BATCH_ID_EXTRACTION_INDEX);
+        if (batchIdExtractionIndexStr != null)
+            batchIdExtractionIndex = Integer.parseInt(batchIdExtractionIndexStr);
+        else
+            batchIdExtractionIndex = 0;
+        String exclusionPatternStr = (String) customConfigs.get(WATCHER_POLICY_EXCLUSION_PATTERN);
+        if (exclusionPatternStr != null)
+            exclusionPattern = Pattern.compile(exclusionPatternStr);
         watchedPatterns = new ArrayList<>();
         String watchPatternStr = (String) customConfigs.get(WATCHER_POLICY_WATCH_PATTERNS);
         if (watchPatternStr == null || watchPatternStr.equals(""))
@@ -68,8 +90,8 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
-    protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern) {
-        return (super.shouldInclude(fileStatus, pattern) &&
+    protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern, Pattern exclusionPattern) {
+        return (super.shouldInclude(fileStatus, pattern, exclusionPattern) &&
                 fileStatus.getModificationTime() < lastRead);
     }
 
@@ -77,14 +99,14 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     public Iterator<FileMetadata> listFiles(FileSystem fs) throws IOException {
         Iterator<FileMetadata> iterator = Collections.emptyIterator();
         for (WatchedPattern pattern : watchedPatterns) {
-            iterator = concat(iterator, buildFileIterator(fs, pattern.bulkFilePattern, new HashMap<String, Object>() {{
+            iterator = concat(iterator, buildFileIterator(fs, pattern.bulkFilePattern, exclusionPattern, new HashMap<String, Object>() {{
                 put(BULK_OPT, true);
                 put(WATCH_KEY_OPT, pattern.key);
             }}));
         }
         for (WatchedPattern pattern : watchedPatterns) {
             if (pattern.incrementalFilePattern != null)
-                iterator = concat(iterator, buildFileIterator(fs, pattern.incrementalFilePattern, new HashMap<String, Object>() {{
+                iterator = concat(iterator, buildFileIterator(fs, pattern.incrementalFilePattern, exclusionPattern, new HashMap<String, Object>() {{
                     put(BULK_OPT, false);
                     put(WATCH_KEY_OPT, pattern.key);
                 }}));
@@ -99,85 +121,88 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
 
     @Override
     public FileReader seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
-        if (offset != null && offset.get("offset") != null && metadata.getPath().equals(offset.get("path"))) {
-            reader.seek(() -> (Long) offset.get("offset"));
+        if (offset != null && offset.get(OFFSET_OPT) != null && metadata.getPath().equals(offset.get(PATH_OPT))) {
+            reader.seek(() -> (Long) offset.get(OFFSET_OPT));
         }
         return reader;
     }
 
-    private String derivePath(FileMetadata metadata) {
-        if (offsetKeySearchPattern == null)
-            return metadata.getPath();
-        return offsetKeySearchPattern.matcher(metadata.getPath()).replaceAll(offsetKeyReplacement);
-    }
-
     @Override
-    public Map<String, Object> buildPartition(FileMetadata metadata) {
+    public Map<String, Object> buildOffsetPartition(FileMetadata metadata) {
         Map<String, Object> value = new HashMap<String, Object>();
         value.put(WATCH_KEY_OPT, metadata.getOpt(WATCH_KEY_OPT));
         return value;
     }
 
     @Override
-    public SchemaAndValue buildKey(FileMetadata metadata) {
-        // build schema
-        SchemaBuilder builder = SchemaBuilder.struct()
-                .name("com.rentpath.filesource.WatchPolicyKey")
-                .optional();
-        builder.field(WATCH_KEY_OPT, Schema.STRING_SCHEMA);
-        Schema schema = builder.build();
-
-        // build value
-        Struct value = new Struct(schema);
-        value.put(WATCH_KEY_OPT, metadata.getOpt(WATCH_KEY_OPT));
-
-        return new SchemaAndValue(schema, value);
+    public SchemaAndValue buildKey(FileMetadata metadata, SchemaAndValue snvValue, Map<String, Object> offset) {
+        Struct v = (Struct) snvValue.value();
+        return new SchemaAndValue(Schema.STRING_SCHEMA, (String) offset.get(BATCH_ID_OPT));
     }
 
     @Override
     public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
-                .name("com.rentpath.filesource.WatcherMetadata")
+                .name(WATCHER_METADATA_TYPE)
                 .optional();
-        metadataBuilder.field("path", Schema.STRING_SCHEMA);
-        metadataBuilder.field("offset", Schema.INT64_SCHEMA);
-        metadataBuilder.field("last", Schema.BOOLEAN_SCHEMA);
-        metadataBuilder.field("bulk", Schema.BOOLEAN_SCHEMA);
-        metadataBuilder.field("watchKey", Schema.STRING_SCHEMA);
-        metadataBuilder.field("bulkPath", Schema.STRING_SCHEMA);
-        metadataBuilder.field("priorBulkPath", Schema.OPTIONAL_STRING_SCHEMA); // will be null for the very first bulk file we ingest for a given watch key
+        metadataBuilder.field(PATH_OPT, Schema.STRING_SCHEMA);
+        metadataBuilder.field(OFFSET_OPT, Schema.INT64_SCHEMA);
+        metadataBuilder.field(LAST_OPT, Schema.BOOLEAN_SCHEMA);
+        metadataBuilder.field(BULK_OPT, Schema.BOOLEAN_SCHEMA);
+        metadataBuilder.field(WATCH_KEY_OPT, Schema.STRING_SCHEMA);
+        metadataBuilder.field(BATCH_ID_OPT, Schema.STRING_SCHEMA);
+        metadataBuilder.field(PRIOR_BATCH_ID_OPT, Schema.OPTIONAL_STRING_SCHEMA); // will be null for the very first bulk file we ingest for a given watch key
         Schema schema = metadataBuilder.build();
 
         Struct metadataValue = new Struct(schema);
-        metadataValue.put("path", metadata.getPath());
-        metadataValue.put("offset", offset);
-        metadataValue.put("last", isLast);
-        metadataValue.put("bulk", (Boolean) metadata.getOpt(BULK_OPT));
-        metadataValue.put("watchKey", (String) metadata.getOpt(WATCH_KEY_OPT));
-        metadataValue.put("bulkPath", (String) connectorOffset.get("bulkPath"));
-        metadataValue.put("priorBulkPath", (String) connectorOffset.get("priorBulkPath"));
+        metadataValue.put(PATH_OPT, metadata.getPath());
+        metadataValue.put(OFFSET_OPT, offset);
+        metadataValue.put(LAST_OPT, isLast);
+        metadataValue.put(BULK_OPT, (Boolean) metadata.getOpt(BULK_OPT));
+        metadataValue.put(WATCH_KEY_OPT, (String) metadata.getOpt(WATCH_KEY_OPT));
+        metadataValue.put(BATCH_ID_OPT, (String) connectorOffset.get(BATCH_ID_OPT));
+        metadataValue.put(PRIOR_BATCH_ID_OPT, (String) connectorOffset.get(PRIOR_BATCH_ID_OPT));
 
         return new SchemaAndValue(schema, metadataValue);
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset, Map<String, Object> priorOffset) {
+    public FileMetadata extractExemplar(List<FileMetadata> batchFileMetadata) {
+        List<FileMetadata> bulkFiles = batchFileMetadata.stream()
+                .sequential()
+                .filter(item -> (Boolean) item.getOpt(BULK_OPT))
+                .collect(Collectors.toList());
+        if (bulkFiles.size() > 0)
+            return bulkFiles.get(0);
+        else
+            return null;
+    }
+
+    @Override
+    public Map<String, Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, long recordOffset, Map<String, Object> priorOffset) {
         HashMap<String, Object> result = new HashMap<String, Object>();
-        result.put("path", metadata.getPath());
-        result.put("lastMod", metadata.getModTime());
-        result.put("offset", recordOffset);
+        result.put(PATH_OPT, metadata.getPath());
+        result.put(LAST_MOD_OPT, metadata.getModTime());
+        result.put(BULK_OPT, metadata.getOpt(BULK_OPT));
+        result.put(OFFSET_OPT, recordOffset);
         // The following values aren't needed for resuming reading where we left off.
         // Rather they are for use in appended metadata (for consumption by a downstream processor).
-        if((recordOffset == 1L) && (Boolean) metadata.getOpt(BULK_OPT)) {
-            result.put("bulkPath", metadata.getPath());
-            if(priorOffset == null) {
-                result.put("priorBulkPath", null);
+        if ((priorOffset == null || !((Boolean) priorOffset.get(BULK_OPT)))
+                && (Boolean) metadata.getOpt(BULK_OPT)) {
+            String firstPath = exemplarMetadata.getPath();
+            Matcher m = batchIdExtractionPattern.matcher(firstPath);
+            if (m.find())
+                result.put(BATCH_ID_OPT, m.group(batchIdExtractionIndex));
+            else
+                result.put(BATCH_ID_OPT, metadata.getPath());
+            if (priorOffset == null) {
+                result.put(PRIOR_BATCH_ID_OPT, null);
             } else {
-                result.put("priorBulkPath", (String) priorOffset.get("bulkPath"));
+                result.put(PRIOR_BATCH_ID_OPT, (String) priorOffset.get(BATCH_ID_OPT));
             }
         } else {
-            result.put("bulkPath", (String) priorOffset.get("bulkPath"));
-            result.put("priorBulkPath", (String) priorOffset.get("priorBulkPath"));
+            result.put(BATCH_ID_OPT, (String) priorOffset.get(BATCH_ID_OPT));
+            result.put(PRIOR_BATCH_ID_OPT, (String) priorOffset.get(PRIOR_BATCH_ID_OPT));
         }
         return result;
     }
@@ -187,12 +212,13 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         // Note that when the connector is first run, the offset will be null.
         if (offset == null) return true;
 
-        if (metadata.getPath().equals((String) offset.get("path"))) {
-          return true;
+        if (metadata.getPath().equals((String) offset.get(PATH_OPT))) {
+            return true;
         }
-        return (metadata.getModTime() > (long) offset.get("lastMod")) ||
-               ((metadata.getModTime() == (long) offset.get("lastMod")) &&
-                ((metadata.getPath().compareTo((String) offset.get("path"))) > 0)); }
+        return (metadata.getModTime() > (long) offset.get(LAST_MOD_OPT)) ||
+                ((metadata.getModTime() == (long) offset.get(LAST_MOD_OPT)) &&
+                        ((metadata.getPath().compareTo((String) offset.get(PATH_OPT))) > 0));
+    }
 
     class WatchedPattern {
         String key;

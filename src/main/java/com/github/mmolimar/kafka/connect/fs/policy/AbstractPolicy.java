@@ -2,7 +2,6 @@ package com.github.mmolimar.kafka.connect.fs.policy;
 
 import com.github.mmolimar.kafka.connect.fs.FsSourceTaskConfig;
 import com.github.mmolimar.kafka.connect.fs.file.FileMetadata;
-import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -17,7 +16,6 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +39,7 @@ public abstract class AbstractPolicy implements Policy {
     private final AtomicInteger executions;
     protected final boolean recursive;
     private boolean interrupted;
+    public static final String FINAL_OPT = "final";
 
     public AbstractPolicy(FsSourceTaskConfig conf) throws IOException {
         this.fileSystems = new ArrayList<>();
@@ -134,11 +133,16 @@ public abstract class AbstractPolicy implements Policy {
     protected void postCheck() {
     }
 
-    protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern) {
-        return (fileStatus.isFile() && pattern.matcher(fileStatus.getPath().toString()).find());
+    protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern, Pattern exclusionPattern) {
+        String path = fileStatus.getPath().toString();
+        return (
+                fileStatus.isFile()
+                && pattern.matcher(path).find()
+                && (exclusionPattern == null || !(exclusionPattern.matcher(path).find()))
+        );
     }
 
-    protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Map<String, Object> opts) throws IOException {
+    protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Pattern exclusionPattern, Map<String, Object> opts) throws IOException {
         return new Iterator<FileMetadata>() {
             RemoteIterator<LocatedFileStatus> it = fs.listFiles(fs.getWorkingDirectory(), recursive);
             LocatedFileStatus current = null;
@@ -152,7 +156,7 @@ public abstract class AbstractPolicy implements Policy {
                         current = it.next();
                         return hasNext();
                     }
-                    if (shouldInclude(current, pattern)) {
+                    if (shouldInclude(current, pattern, exclusionPattern)) {
                         return true;
                     }
                     current = null;
@@ -167,7 +171,7 @@ public abstract class AbstractPolicy implements Policy {
                 if (!hasNext() && current == null) {
                     throw new NoSuchElementException("There are no more items");
                 }
-                FileMetadata metadata = toMetadata(current, opts);
+                FileMetadata metadata = toMetadata(current, hasNext(), opts);
                 current = null;
                 return metadata;
             }
@@ -175,7 +179,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern) throws IOException {
-        return buildFileIterator(fs, pattern, null);
+        return buildFileIterator(fs, pattern, null, null);
     }
 
     public Iterator<FileMetadata> listFiles(FileSystem fs) throws IOException {
@@ -193,7 +197,7 @@ public abstract class AbstractPolicy implements Policy {
         return executions.get();
     }
 
-    protected FileMetadata toMetadata(LocatedFileStatus fileStatus, Map<String, Object> opts) {
+    protected FileMetadata toMetadata(LocatedFileStatus fileStatus, boolean continues, Map<String, Object> opts) {
         List<FileMetadata.BlockInfo> blocks = new ArrayList<>();
 
         blocks.addAll(Arrays.stream(fileStatus.getBlockLocations())
@@ -202,6 +206,10 @@ public abstract class AbstractPolicy implements Policy {
                 .collect(Collectors.toList()));
 
         FileMetadata metadata = new FileMetadata(fileStatus.getPath().toString(), fileStatus.getLen(), fileStatus.getModificationTime(), blocks);
+        if (continues)
+            metadata.setOpt(FINAL_OPT, false);
+        else
+            metadata.setOpt(FINAL_OPT, true);
         if (opts != null)
             for (String key : opts.keySet())
                 metadata.setOpt(key, opts.get(key));
@@ -279,7 +287,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public Map<String, Object> buildPartition(FileMetadata metadata) {
+    public Map<String, Object> buildOffsetPartition(FileMetadata metadata) {
         Map<String, Object> value = new HashMap<String, Object>() {
             {
                 put("path", metadata.getPath());
@@ -289,7 +297,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public SchemaAndValue buildKey(FileMetadata metadata) {
+    public SchemaAndValue buildKey(FileMetadata metadata, SchemaAndValue snvValue, Map<String, Object> offset) {
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("path", SchemaBuilder.STRING_SCHEMA);
         Schema schema = builder.build();
@@ -314,7 +322,15 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset, Map<String, Object> priorOffset) {
+    public Map<String, Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, long recordOffset, Map<String, Object> priorOffset) {
         return Collections.singletonMap("offset", recordOffset);
+    }
+
+    @Override
+    public FileMetadata extractExemplar(List<FileMetadata> batchFileMetadata) {
+        if (batchFileMetadata.size() > 0)
+            return batchFileMetadata.get(0);
+        else
+            return null;
     }
 }
