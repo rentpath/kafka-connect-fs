@@ -6,6 +6,7 @@ import com.github.mmolimar.kafka.connect.fs.file.reader.DelimitedTextFileReader;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -99,8 +100,7 @@ public class DelimitedTextFileReaderTest extends LocalFileReaderTestBase {
 
         int recordCount = 0;
         while (reader.hasNext()) {
-            Struct record = reader.next();
-            checkData(record, recordCount);
+            checkData(reader.next(), recordCount);
             recordCount++;
         }
         assertEquals("The number of records in the file does not match", NUM_RECORDS, recordCount);
@@ -129,7 +129,7 @@ public class DelimitedTextFileReaderTest extends LocalFileReaderTestBase {
 
         int recordCount = 0;
         while (reader.hasNext()) {
-            Struct record = reader.next();
+            Struct record = (Struct)reader.next().value();
             assertTrue(record.get(FIELD_COLUMN1).equals("dummy"));
             assertTrue(record.get(FIELD_COLUMN2).equals("custom_value"));
             assertTrue(record.get(FIELD_COLUMN3).equals("custom_value"));
@@ -205,11 +205,12 @@ public class DelimitedTextFileReaderTest extends LocalFileReaderTestBase {
     }
 
     @Override
-    protected void checkData(Struct record, long index) {
-        assertTrue(record.get(FIELD_COLUMN1).toString().startsWith(index + "_"));
-        assertTrue(record.get(FIELD_COLUMN2).toString().startsWith(index + "_"));
-        assertTrue(record.get(FIELD_COLUMN3).toString().startsWith(index + "_"));
-        assertTrue(record.get(FIELD_COLUMN4).toString().startsWith(index + "_"));
+    protected void checkData(SchemaAndValue record, long index) {
+        Struct recordStruct = (Struct) record.value();
+        assertTrue(recordStruct.get(FIELD_COLUMN1).toString().startsWith(index + "_"));
+        assertTrue(recordStruct.get(FIELD_COLUMN2).toString().startsWith(index + "_"));
+        assertTrue(recordStruct.get(FIELD_COLUMN3).toString().startsWith(index + "_"));
+        assertTrue(recordStruct.get(FIELD_COLUMN4).toString().startsWith(index + "_"));
     }
 
     @Override

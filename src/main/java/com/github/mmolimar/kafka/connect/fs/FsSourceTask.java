@@ -7,6 +7,10 @@ import com.github.mmolimar.kafka.connect.fs.policy.Policy;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import com.github.mmolimar.kafka.connect.fs.util.Version;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -27,6 +31,9 @@ public class FsSourceTask extends SourceTask {
     private AtomicBoolean stop;
     private FsSourceTaskConfig config;
     private Policy policy;
+    private long maxBatchSize;
+    private boolean firstPoll;
+    private Map<Object, Object> offsets;
 
     @Override
     public String version() {
@@ -35,8 +42,11 @@ public class FsSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> properties) {
+        firstPoll = true;
+        offsets = new HashMap<Object, Object>();
         try {
             config = new FsSourceTaskConfig(properties);
+            maxBatchSize = config.getLong(FsSourceTaskConfig.MAX_BATCH_SIZE);
 
             if (config.getClass(FsSourceTaskConfig.POLICY_CLASS).isAssignableFrom(Policy.class)) {
                 throw new ConfigException("Policy class " +
@@ -61,27 +71,87 @@ public class FsSourceTask extends SourceTask {
         stop = new AtomicBoolean(false);
     }
 
+    private SchemaAndValue appendMetadata(SchemaAndValue source, FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
+        Schema sourceSchema = source.schema();
+        Struct sourceValue = (Struct) source.value();
+        SchemaBuilder builder = SchemaBuilder.struct()
+                .name(sourceSchema.name())
+                .optional();
+        for (Field field : sourceSchema.fields()) {
+            builder.field(field.name(), field.schema());
+        }
+
+        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, offset, isLast, connectorOffset);
+        builder.field("_file_metadata", policyMetadata.schema());
+        Schema schema = builder.build();
+
+        Struct value = new Struct(schema);
+        for (Field field : sourceSchema.fields()) {
+            value.put(field.name(), sourceValue.get(field.name()));
+        }
+
+        value.put("_file_metadata", policyMetadata.value());
+        return new SchemaAndValue(schema, value);
+    }
+
+    // Compare by mod time (falling back to path comparison for equal mod times).
+    private int compareFileMetadata(FileMetadata f1, FileMetadata f2) {
+      if (f1.getModTime() == f2.getModTime())
+          return f1.getPath().compareTo(f2.getPath());
+      return (new Long(f1.getModTime())).compareTo(new Long(f2.getModTime()));
+    }
+
+    private Map<String, Object> getOffset(Map<String, Object> partition) {
+        Map<String, Object> offset = (Map<String, Object>) offsets.get(partition);
+        if(offset == null) {
+            offset = context.offsetStorageReader().offset(partition);
+            offsets.put(partition, offset);
+        }
+        return offset;
+    }
+
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         while (stop != null && !stop.get() && !policy.hasEnded()) {
+            if ((config.getPollIntervalMs() > 0) && !firstPoll) {
+                Thread.sleep(config.getPollIntervalMs());
+            }
+            firstPoll = false;
             log.trace("Polling for new data");
 
             final List<SourceRecord> results = new ArrayList<>();
             List<FileMetadata> files = filesToProcess();
-            files.forEach(metadata -> {
-                try (FileReader reader = policy.offer(metadata, context.offsetStorageReader())) {
-                    log.info("Processing records for file {}", metadata);
-                    while (reader.hasNext()) {
-                        results.add(convert(metadata, reader.currentOffset(), reader.next()));
+            // Sort files by last mod time so that we handle older files first.
+            Collections.sort(files, (FileMetadata f1, FileMetadata f2) -> compareFileMetadata(f1, f2));
+
+            int count = 0;
+            for (FileMetadata metadata : files) {
+                Map<String, Object> partition = policy.buildPartition(metadata);
+                Map<String, Object> lastOffset = getOffset(partition);
+                try (FileReader reader = policy.offer(metadata, lastOffset)) {
+                    if (reader != null) {
+                        while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
+                            log.info("Processing records for file {}", metadata);
+                            long recordOffset = reader.currentOffset().getRecordOffset();
+                            SchemaAndValue sAndV = reader.next();
+                            boolean isLast = !reader.hasNext();
+                            Map<String, Object> offset = policy.buildOffset(metadata, recordOffset, lastOffset);
+                            if (config.getIncludeMetadata()) {
+                                sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast, offset);
+                            }
+                            results.add(convert(metadata, policy, partition, offset, sAndV));
+                            offsets.put(partition, offset);
+                            lastOffset = offset;
+                            count++;
+                        }
                     }
                 } catch (ConnectException | IOException e) {
                     //when an exception happens reading a file, the connector continues
                     log.error("Error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
                 }
-            });
+            }
             return results;
         }
-
         return null;
     }
 
@@ -90,9 +160,9 @@ public class FsSourceTask extends SourceTask {
             return asStream(policy.execute())
                     .filter(metadata -> metadata.getLen() > 0)
                     .collect(Collectors.toList());
-        } catch (IOException | ConnectException e) {
+        } catch (IOException | RuntimeException e) {
             //when an exception happens executing the policy, the connector continues
-            log.error("Cannot retrive files to process from FS: " + policy.getURIs() + ". Keep going...", e);
+            log.error("Cannot retrieve files to process from FS: " + policy.getURIs() + ". Keep going...", e);
             return Collections.EMPTY_LIST;
         }
     }
@@ -102,19 +172,16 @@ public class FsSourceTask extends SourceTask {
         return StreamSupport.stream(iterable.spliterator(), false);
     }
 
-    private SourceRecord convert(FileMetadata metadata, Offset offset, Struct struct) {
+    private SourceRecord convert(FileMetadata metadata, Policy policy, Map<String, Object> partition, Map<String, Object> offset, SchemaAndValue snvValue) {
+        SchemaAndValue snvKey = policy.buildKey(metadata);
         return new SourceRecord(
-                new HashMap<String, Object>() {
-                    {
-                        put("path", metadata.getPath());
-                        //TODO manage blocks
-                        //put("blocks", metadata.getBlocks().toString());
-                    }
-                },
-                Collections.singletonMap("offset", offset.getRecordOffset()),
-                config.getTopic(),
-                struct.schema(),
-                struct
+            partition,
+            offset,
+            config.getTopic(),
+            snvKey.schema(),
+            snvKey.value(),
+            snvValue.schema(),
+            snvValue.value()
         );
     }
 

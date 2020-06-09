@@ -12,6 +12,7 @@ import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumWriter;
 import org.apache.hadoop.fs.Path;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -100,10 +101,11 @@ public class AvroFileReaderTest extends HdfsFileReaderTestBase {
     }
 
     @Override
-    protected void checkData(Struct record, long index) {
-        assertTrue((Integer) record.get(FIELD_INDEX) == index);
-        assertTrue(record.get(FIELD_NAME).toString().startsWith(index + "_"));
-        assertTrue(record.get(FIELD_SURNAME).toString().startsWith(index + "_"));
+    protected void checkData(SchemaAndValue record, long index) {
+        Struct recordStruct = (Struct) record.value();
+        assertTrue((Integer) recordStruct.get(FIELD_INDEX) == index);
+        assertTrue(recordStruct.get(FIELD_NAME).toString().startsWith(index + "_"));
+        assertTrue(recordStruct.get(FIELD_SURNAME).toString().startsWith(index + "_"));
     }
 
     @Override

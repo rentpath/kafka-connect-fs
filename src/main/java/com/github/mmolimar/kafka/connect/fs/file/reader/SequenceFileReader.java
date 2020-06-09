@@ -6,6 +6,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -40,7 +41,7 @@ public class SequenceFileReader extends AbstractFileReader<SequenceFileReader.Se
     private boolean hasNext;
 
     public SequenceFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws IOException {
-        super(fs, filePath, new SeqToStruct(), config);
+        super(fs, filePath, config);
 
         this.reader = new SequenceFile.Reader(fs.getConf(),
                 SequenceFile.Reader.file(filePath),
@@ -54,6 +55,11 @@ public class SequenceFileReader extends AbstractFileReader<SequenceFileReader.Se
         this.offset = new SeqOffset(0);
         this.recordIndex = this.hasNextIndex = -1;
         this.hasNext = false;
+    }
+
+    @Override
+    protected ReaderAdapter<SequenceRecord<Writable, Writable>> buildAdapter(Map<String, Object> config) {
+        return new SeqToStruct();
     }
 
     @Override
@@ -110,7 +116,7 @@ public class SequenceFileReader extends AbstractFileReader<SequenceFileReader.Se
     }
 
     @Override
-    protected SequenceRecord<Writable, Writable> nextRecord() {
+    protected SequenceRecord nextRecord() {
         if (!hasNext()) {
             throw new NoSuchElementException("There are no more records in file: " + getFilePath());
         }
@@ -167,10 +173,11 @@ public class SequenceFileReader extends AbstractFileReader<SequenceFileReader.Se
     static class SeqToStruct implements ReaderAdapter<SequenceRecord<Writable, Writable>> {
 
         @Override
-        public Struct apply(SequenceRecord<Writable, Writable> record) {
-            return new Struct(record.schema)
+        public SchemaAndValue apply(SequenceRecord<Writable, Writable> record) {
+            Struct struct = new Struct(record.schema)
                     .put(record.keyFieldName, toSchemaValue(record.key))
                     .put(record.valueFieldName, toSchemaValue(record.value));
+            return new SchemaAndValue(struct.schema(), struct);
         }
 
         private Object toSchemaValue(Writable writable) {

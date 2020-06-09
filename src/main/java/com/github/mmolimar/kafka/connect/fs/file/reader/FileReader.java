@@ -2,26 +2,20 @@ package com.github.mmolimar.kafka.connect.fs.file.reader;
 
 import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import org.apache.hadoop.fs.Path;
-import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.SchemaAndValue;
 
 import java.io.Closeable;
 import java.util.Iterator;
-import java.util.function.Function;
 
-public interface FileReader extends Iterator<Struct>, Closeable {
+public interface FileReader extends Iterator<SchemaAndValue>, Closeable {
 
     Path getFilePath();
 
     boolean hasNext();
 
-    Struct next();
+    SchemaAndValue next();
 
     void seek(Offset offset);
 
     Offset currentOffset();
-}
-
-@FunctionalInterface
-interface ReaderAdapter<T> extends Function<T, Struct> {
-
 }

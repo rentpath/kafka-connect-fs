@@ -145,8 +145,8 @@ public class HdfsFileWatcherPolicy extends AbstractPolicy {
             RemoteIterator<LocatedFileStatus> it = fs.listFiles(filePath, false);
             while (it.hasNext()) {
                 LocatedFileStatus status = it.next();
-                if (!status.isFile() || !fileRegexp.matcher(status.getPath().getName()).find()) continue;
-                fileQueue.offer(toMetadata(status));
+                if (!status.isFile() || !filePattern.matcher(status.getPath().getName()).find()) continue;
+                fileQueue.offer(toMetadata(status, null));
             }
         }
     }

@@ -31,14 +31,15 @@
     </licenses>
     <properties>
         <javac.version>1.8</javac.version>
-        <kafka.version>2.4.0</kafka.version>
-        <confluent.version>5.3.2</confluent.version>
-        <hadoop.version>2.9.0</hadoop.version>
+        <kafka.version>5.4.1-ccs</kafka.version>
+        <confluent.version>5.4.1</confluent.version>
+        <hadoop.version>2.9.2</hadoop.version>
         <avro.version>1.8.1</avro.version>
         <parquet.version>1.9.0</parquet.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.4</easymock.version>
         <powermock.version>1.6.6</powermock.version>
+        <github.version>1.108</github.version>
         <okHttpVersion>2.4.0</okHttpVersion>
         <minimalJsonVersion>0.9.1</minimalJsonVersion>
         <file.encoding>UTF-8</file.encoding>
@@ -77,10 +78,20 @@
     </distributionManagement>
     <dependencies>
         <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.10.2</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-api</artifactId>
             <version>${kafka.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.kohsuke</groupId>
+            <artifactId>github-api</artifactId>
+            <version>${github.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>

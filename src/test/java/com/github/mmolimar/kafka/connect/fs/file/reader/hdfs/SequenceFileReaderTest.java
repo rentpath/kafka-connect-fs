@@ -9,6 +9,7 @@ import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -81,8 +82,7 @@ public class SequenceFileReaderTest extends HdfsFileReaderTestBase {
 
         int recordCount = 0;
         while (reader.hasNext()) {
-            Struct record = reader.next();
-            checkData(SequenceFileReader.FIELD_NAME_KEY_DEFAULT, SequenceFileReader.FIELD_NAME_VALUE_DEFAULT, record, recordCount);
+            checkData(SequenceFileReader.FIELD_NAME_KEY_DEFAULT, SequenceFileReader.FIELD_NAME_VALUE_DEFAULT, reader.next(), recordCount);
             recordCount++;
         }
         assertEquals("The number of records in the file does not match", NUM_RECORDS, recordCount);
@@ -94,13 +94,14 @@ public class SequenceFileReaderTest extends HdfsFileReaderTestBase {
     }
 
     @Override
-    protected void checkData(Struct record, long index) {
+    protected void checkData(SchemaAndValue record, long index) {
         checkData(FIELD_NAME_KEY, FIELD_NAME_VALUE, record, index);
     }
 
-    private void checkData(String keyFieldName, String valueFieldName, Struct record, long index) {
-        assertTrue((Integer) record.get(keyFieldName) == index);
-        assertTrue(record.get(valueFieldName).toString().startsWith(index + "_"));
+    private void checkData(String keyFieldName, String valueFieldName, SchemaAndValue record, long index) {
+        Struct recordStruct = (Struct) record.value();
+        assertTrue((Integer) recordStruct.get(keyFieldName) == index);
+        assertTrue(recordStruct.get(valueFieldName).toString().startsWith(index + "_"));
     }
 
     @Override
