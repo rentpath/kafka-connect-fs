@@ -26,7 +26,7 @@ public interface Policy extends Closeable {
     void interrupt();
 
     Map<String,Object> buildPartition(FileMetadata metadata);
-    Map<String,Object> buildOffset(FileMetadata metadata, long recordOffset);
+    Map<String,Object> buildOffset(FileMetadata metadata, long recordOffset, Map<String,Object> priorOffset);
     SchemaAndValue buildKey(FileMetadata metadata);
-    SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast);
+    SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset);
 }

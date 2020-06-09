@@ -300,7 +300,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast) {
+    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
                 .name("com.rentpath.filesource.Metadata")
                 .optional();
@@ -314,7 +314,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset) {
+    public Map<String, Object> buildOffset(FileMetadata metadata, long recordOffset, Map<String, Object> priorOffset) {
         return Collections.singletonMap("offset", recordOffset);
     }
 }

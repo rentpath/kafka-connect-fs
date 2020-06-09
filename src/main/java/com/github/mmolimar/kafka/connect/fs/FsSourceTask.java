@@ -71,7 +71,7 @@ public class FsSourceTask extends SourceTask {
         stop = new AtomicBoolean(false);
     }
 
-    private SchemaAndValue appendMetadata(SchemaAndValue source, FileMetadata metadata, long offset, boolean isLast) {
+    private SchemaAndValue appendMetadata(SchemaAndValue source, FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
         Schema sourceSchema = source.schema();
         Struct sourceValue = (Struct) source.value();
         SchemaBuilder builder = SchemaBuilder.struct()
@@ -81,7 +81,7 @@ public class FsSourceTask extends SourceTask {
             builder.field(field.name(), field.schema());
         }
 
-        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, offset, isLast);
+        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, offset, isLast, connectorOffset);
         builder.field("_file_metadata", policyMetadata.schema());
         Schema schema = builder.build();
 
@@ -135,11 +135,13 @@ public class FsSourceTask extends SourceTask {
                             long recordOffset = reader.currentOffset().getRecordOffset();
                             SchemaAndValue sAndV = reader.next();
                             boolean isLast = !reader.hasNext();
-                            if (config.getIncludeMetadata())
-                                sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast);
-                            Map<String, Object> offset = policy.buildOffset(metadata, recordOffset);
+                            Map<String, Object> offset = policy.buildOffset(metadata, recordOffset, lastOffset);
+                            if (config.getIncludeMetadata()) {
+                                sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast, offset);
+                            }
                             results.add(convert(metadata, policy, partition, offset, sAndV));
                             offsets.put(partition, offset);
+                            lastOffset = offset;
                             count++;
                         }
                     }
@@ -158,7 +160,7 @@ public class FsSourceTask extends SourceTask {
             return asStream(policy.execute())
                     .filter(metadata -> metadata.getLen() > 0)
                     .collect(Collectors.toList());
-        } catch (IOException | ConnectException e) {
+        } catch (IOException | RuntimeException e) {
             //when an exception happens executing the policy, the connector continues
             log.error("Cannot retrieve files to process from FS: " + policy.getURIs() + ". Keep going...", e);
             return Collections.EMPTY_LIST;
