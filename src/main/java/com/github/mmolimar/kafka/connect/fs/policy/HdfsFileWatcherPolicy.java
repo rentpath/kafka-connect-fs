@@ -146,7 +146,7 @@ public class HdfsFileWatcherPolicy extends AbstractPolicy {
             while (it.hasNext()) {
                 LocatedFileStatus status = it.next();
                 if (!status.isFile() || !filePattern.matcher(status.getPath().getName()).find()) continue;
-                fileQueue.offer(toMetadata(status, null));
+                fileQueue.offer(toMetadata(status, true, null));
             }
         }
     }

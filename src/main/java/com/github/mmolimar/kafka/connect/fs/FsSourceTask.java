@@ -1,8 +1,8 @@
 package com.github.mmolimar.kafka.connect.fs;
 
 import com.github.mmolimar.kafka.connect.fs.file.FileMetadata;
-import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
+import com.github.mmolimar.kafka.connect.fs.policy.AbstractPolicy;
 import com.github.mmolimar.kafka.connect.fs.policy.Policy;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import com.github.mmolimar.kafka.connect.fs.util.Version;
@@ -27,6 +27,7 @@ import java.util.stream.StreamSupport;
 
 public class FsSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(FsSourceTask.class);
+    private static final String FILE_METADATA_KEY = "_file_metadata";
 
     private AtomicBoolean stop;
     private FsSourceTaskConfig config;
@@ -82,7 +83,7 @@ public class FsSourceTask extends SourceTask {
         }
 
         SchemaAndValue policyMetadata = policy.buildMetadata(metadata, offset, isLast, connectorOffset);
-        builder.field("_file_metadata", policyMetadata.schema());
+        builder.field(FILE_METADATA_KEY, policyMetadata.schema());
         Schema schema = builder.build();
 
         Struct value = new Struct(schema);
@@ -90,7 +91,7 @@ public class FsSourceTask extends SourceTask {
             value.put(field.name(), sourceValue.get(field.name()));
         }
 
-        value.put("_file_metadata", policyMetadata.value());
+        value.put(FILE_METADATA_KEY, policyMetadata.value());
         return new SchemaAndValue(schema, value);
     }
 
@@ -123,19 +124,22 @@ public class FsSourceTask extends SourceTask {
             List<FileMetadata> files = filesToProcess();
             // Sort files by last mod time so that we handle older files first.
             Collections.sort(files, (FileMetadata f1, FileMetadata f2) -> compareFileMetadata(f1, f2));
-
+            FileMetadata exemplarMetadata = policy.extractExemplar(files);
+            if (exemplarMetadata == null)
+                return new ArrayList<SourceRecord>();
             int count = 0;
             for (FileMetadata metadata : files) {
-                Map<String, Object> partition = policy.buildPartition(metadata);
+                Map<String, Object> partition = policy.buildOffsetPartition(metadata);
                 Map<String, Object> lastOffset = getOffset(partition);
                 try (FileReader reader = policy.offer(metadata, lastOffset)) {
                     if (reader != null) {
+                        log.info("Processing records for file {}", metadata);
                         while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
-                            log.info("Processing records for file {}", metadata);
                             long recordOffset = reader.currentOffset().getRecordOffset();
                             SchemaAndValue sAndV = reader.next();
-                            boolean isLast = !reader.hasNext();
-                            Map<String, Object> offset = policy.buildOffset(metadata, recordOffset, lastOffset);
+                            // only mark last if both the final file in the iterator *and* the last record in the file
+                            boolean isLast = ((Boolean) metadata.getOpt(AbstractPolicy.FINAL_OPT)) && !reader.hasNext();
+                            Map<String, Object> offset = policy.buildOffset(metadata, exemplarMetadata, recordOffset, lastOffset);
                             if (config.getIncludeMetadata()) {
                                 sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast, offset);
                             }
@@ -173,7 +177,7 @@ public class FsSourceTask extends SourceTask {
     }
 
     private SourceRecord convert(FileMetadata metadata, Policy policy, Map<String, Object> partition, Map<String, Object> offset, SchemaAndValue snvValue) {
-        SchemaAndValue snvKey = policy.buildKey(metadata);
+        SchemaAndValue snvKey = policy.buildKey(metadata, snvValue, offset);
         return new SourceRecord(
             partition,
             offset,
