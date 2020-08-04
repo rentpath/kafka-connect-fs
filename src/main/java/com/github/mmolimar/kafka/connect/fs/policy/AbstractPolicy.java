@@ -145,21 +145,21 @@ public abstract class AbstractPolicy implements Policy {
     protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Pattern exclusionPattern, Map<String, Object> opts) throws IOException {
         return new Iterator<FileMetadata>() {
             RemoteIterator<LocatedFileStatus> it = fs.listFiles(fs.getWorkingDirectory(), recursive);
-            LocatedFileStatus nextUp = null;
+            LocatedFileStatus current = null;
             boolean previous = false;
 
             @Override
             public boolean hasNext() {
                 try {
-                    if (nextUp == null) {
+                    if (current == null) {
                         if (!it.hasNext()) return false;
-                        nextUp = it.next();
+                        current = it.next();
                         return hasNext();
                     }
-                    if (shouldInclude(nextUp, pattern, exclusionPattern)) {
+                    if (shouldInclude(current, pattern, exclusionPattern)) {
                         return true;
                     }
-                    nextUp = null;
+                    current = null;
                     return hasNext();
                 } catch (IOException ioe) {
                     throw new ConnectException(ioe);
@@ -168,12 +168,12 @@ public abstract class AbstractPolicy implements Policy {
 
             @Override
             public FileMetadata next() {
-                if (!hasNext() && nextUp == null) {
+                if (!hasNext() && current == null) {
                     throw new NoSuchElementException("There are no more items");
                 }
-                LocatedFileStatus current = nextUp;
-                nextUp = null;
-                FileMetadata metadata = toMetadata(current, hasNext(), opts);
+                LocatedFileStatus nextFile = current;
+                current = null;
+                FileMetadata metadata = toMetadata(nextFile, hasNext(), opts);
                 return metadata;
             }
         };
