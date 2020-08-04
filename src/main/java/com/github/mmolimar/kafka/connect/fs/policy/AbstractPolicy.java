@@ -145,21 +145,21 @@ public abstract class AbstractPolicy implements Policy {
     protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Pattern exclusionPattern, Map<String, Object> opts) throws IOException {
         return new Iterator<FileMetadata>() {
             RemoteIterator<LocatedFileStatus> it = fs.listFiles(fs.getWorkingDirectory(), recursive);
-            LocatedFileStatus current = null;
+            LocatedFileStatus nextUp = null;
             boolean previous = false;
 
             @Override
             public boolean hasNext() {
                 try {
-                    if (current == null) {
+                    if (nextUp == null) {
                         if (!it.hasNext()) return false;
-                        current = it.next();
+                        nextUp = it.next();
                         return hasNext();
                     }
-                    if (shouldInclude(current, pattern, exclusionPattern)) {
+                    if (shouldInclude(nextUp, pattern, exclusionPattern)) {
                         return true;
                     }
-                    current = null;
+                    nextUp = null;
                     return hasNext();
                 } catch (IOException ioe) {
                     throw new ConnectException(ioe);
@@ -168,11 +168,12 @@ public abstract class AbstractPolicy implements Policy {
 
             @Override
             public FileMetadata next() {
-                if (!hasNext() && current == null) {
+                if (!hasNext() && nextUp == null) {
                     throw new NoSuchElementException("There are no more items");
                 }
+                LocatedFileStatus current = nextUp;
+                nextUp = null;
                 FileMetadata metadata = toMetadata(current, hasNext(), opts);
-                current = null;
                 return metadata;
             }
         };
