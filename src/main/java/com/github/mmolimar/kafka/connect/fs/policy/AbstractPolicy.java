@@ -171,8 +171,9 @@ public abstract class AbstractPolicy implements Policy {
                 if (!hasNext() && current == null) {
                     throw new NoSuchElementException("There are no more items");
                 }
-                FileMetadata metadata = toMetadata(current, hasNext(), opts);
+                LocatedFileStatus nextFile = current;
                 current = null;
+                FileMetadata metadata = toMetadata(nextFile, hasNext(), opts);
                 return metadata;
             }
         };
