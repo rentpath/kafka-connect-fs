@@ -218,11 +218,11 @@ public abstract class AbstractPolicy implements Policy {
         return metadata;
     }
 
-    public FileReader seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
+    @Override
+    public void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
         if (offset != null && offset.get("offset") != null) {
             reader.seek(() -> (Long) offset.get("offset"));
         }
-        return reader;
     }
 
     protected boolean shouldOffer(FileMetadata metadata, Map<String, Object> offset) {
@@ -245,8 +245,7 @@ public abstract class AbstractPolicy implements Policy {
         } catch (Throwable t) {
             throw new ConnectException("An error has occurred when creating reader for file: " + metadata.getPath(), t);
         }
-
-        return seekReader(metadata, lastOffset, reader);
+        return reader;
     }
 
     Iterator<FileMetadata> concat(final Iterator<FileMetadata> it1,
