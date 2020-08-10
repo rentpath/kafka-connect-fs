@@ -27,4 +27,5 @@ public interface Policy extends Closeable {
     SchemaAndValue buildKey(FileMetadata metadata, SchemaAndValue snvValue, Map<String, Object> offset);
     SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset);
     FileMetadata extractExemplar(List<FileMetadata> batchFileMetadata);
+    void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader);
 }
