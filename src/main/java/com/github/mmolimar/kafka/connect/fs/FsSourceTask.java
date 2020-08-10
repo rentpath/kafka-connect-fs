@@ -132,9 +132,9 @@ public class FsSourceTask extends SourceTask {
                 Map<String, Object> partition = policy.buildOffsetPartition(metadata);
                 Map<String, Object> lastOffset = getOffset(partition);
                 try (FileReader reader = policy.offer(metadata, lastOffset)) {
-                    policy.seekReader(metadata, lastOffset, reader);
                     if (reader != null) {
                         log.info("Processing records for file {}", metadata);
+                        policy.seekReader(metadata, lastOffset, reader);
                         while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
                             long recordOffset = reader.currentOffset().getRecordOffset();
                             SchemaAndValue sAndV = reader.next();
