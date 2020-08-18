@@ -7,6 +7,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.ConnectException;
 
 import java.io.IOException;
 import java.util.Map;
@@ -100,7 +101,7 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
     }
 
     @Override
-    public void seek(Offset offset) {
+    public void seek(Offset offset) throws ConnectException, IllegalArgumentException {
         inner.seek(offset);
         this.offset.setOffset(inner.currentOffset().getRecordOffset());
     }

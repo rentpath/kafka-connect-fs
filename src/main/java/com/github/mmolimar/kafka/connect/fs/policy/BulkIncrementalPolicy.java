@@ -120,7 +120,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
-    public void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
+    public void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) throws ConnectException, IOException, IllegalArgumentException {
         if (offset != null && offset.get(OFFSET_OPT) != null && metadata.getPath().equals(offset.get(PATH_OPT))) {
             reader.seek(() -> (Long) offset.get(OFFSET_OPT));
         }

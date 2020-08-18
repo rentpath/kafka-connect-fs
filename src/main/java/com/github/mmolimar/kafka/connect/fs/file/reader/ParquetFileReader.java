@@ -107,7 +107,7 @@ public class ParquetFileReader extends AbstractFileReader<GenericRecord> {
     }
 
     @Override
-    public void seek(Offset offset) {
+    public void seek(Offset offset) throws ConnectException, IllegalArgumentException {
         if (closed) {
             throw new ConnectException("Stream is closed!");
         }

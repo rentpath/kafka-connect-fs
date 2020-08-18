@@ -219,7 +219,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) {
+    public void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) throws ConnectException, IOException, IllegalArgumentException {
         if (offset != null && offset.get("offset") != null) {
             reader.seek(() -> (Long) offset.get("offset"));
         }

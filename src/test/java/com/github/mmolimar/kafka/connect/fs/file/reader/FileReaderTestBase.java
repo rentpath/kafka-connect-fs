@@ -98,7 +98,7 @@ public abstract class FileReaderTestBase {
     }
 
     @Test
-    public void seekFile() {
+    public void seekFile() throws IOException {
         int recordIndex = NUM_RECORDS / 2;
         reader.seek(getOffset(OFFSETS_BY_INDEX.get(recordIndex)));
         assertTrue(reader.hasNext());
@@ -123,12 +123,12 @@ public abstract class FileReaderTestBase {
     }
 
     @Test(expected = RuntimeException.class)
-    public void negativeSeek() {
+    public void negativeSeek() throws IOException {
         reader.seek(getOffset(-1));
     }
 
     @Test(expected = NoSuchElementException.class)
-    public void exceededSeek() {
+    public void exceededSeek() throws IOException {
         reader.seek(getOffset(OFFSETS_BY_INDEX.get(NUM_RECORDS - 1) + 1));
         assertFalse(reader.hasNext());
         reader.next();
