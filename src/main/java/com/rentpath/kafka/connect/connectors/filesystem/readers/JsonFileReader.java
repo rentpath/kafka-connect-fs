@@ -12,6 +12,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.mortbay.util.ajax.JSON;
@@ -87,7 +88,7 @@ public class JsonFileReader implements FileReader {
     }
 
     @Override
-    public void seek(Offset offset) {
+    public void seek(Offset offset) throws ConnectException, IllegalArgumentException {
         reader.seek(offset);
     }
 

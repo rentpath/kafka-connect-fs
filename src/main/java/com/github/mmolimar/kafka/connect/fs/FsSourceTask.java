@@ -150,8 +150,10 @@ public class FsSourceTask extends SourceTask {
                             count++;
                         }
                     }
-                } catch (ConnectException | IOException e) {
+                } catch (ConnectException e) {
                     //when an exception happens reading a file, the connector continues
+                    log.error("Possible error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
+                } catch (IOException e) {
                     log.error("Error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
                 }
             }

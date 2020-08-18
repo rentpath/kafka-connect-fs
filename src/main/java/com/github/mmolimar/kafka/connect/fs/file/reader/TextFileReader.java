@@ -144,7 +144,7 @@ public class TextFileReader extends AbstractFileReader<TextFileReader.TextRecord
     }
 
     @Override
-    public void seek(Offset offset) {
+    public void seek(Offset offset) throws ConnectException, IllegalArgumentException {
         if (offset.getRecordOffset() < 0) {
             throw new IllegalArgumentException("Record offset must be greater than 0");
         }

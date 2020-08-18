@@ -7,6 +7,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.kafka.connect.data.SchemaAndValue;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -85,7 +86,7 @@ public class AgnosticFileReader extends AbstractFileReader<AgnosticFileReader.Ag
     }
 
     @Override
-    public void seek(Offset offset) {
+    public void seek(Offset offset) throws ConnectException, IOException, IllegalArgumentException {
         reader.seek(offset);
     }
 

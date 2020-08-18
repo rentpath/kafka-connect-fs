@@ -63,7 +63,7 @@ public class AvroFileReader extends AbstractFileReader<GenericRecord> {
     }
 
     @Override
-    public void seek(Offset offset) {
+    public void seek(Offset offset) throws ConnectException {
         try {
             reader.sync(offset.getRecordOffset());
             this.offset.setOffset(reader.previousSync() - 15);
