@@ -6,6 +6,7 @@ import com.github.mmolimar.kafka.connect.fs.policy.AbstractPolicy;
 import com.github.mmolimar.kafka.connect.fs.policy.Policy;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import com.github.mmolimar.kafka.connect.fs.util.Version;
+import org.apache.hadoop.fs.FSError;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -155,6 +156,8 @@ public class FsSourceTask extends SourceTask {
                     log.error("Possible error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
                 } catch (IOException e) {
                     log.error("Error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
+                } catch (FSError e) {
+                    log.error("Filesystem Error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
                 }
             }
             return results;
