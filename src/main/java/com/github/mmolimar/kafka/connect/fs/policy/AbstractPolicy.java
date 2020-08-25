@@ -2,6 +2,8 @@ package com.github.mmolimar.kafka.connect.fs.policy;
 
 import com.github.mmolimar.kafka.connect.fs.FsSourceTaskConfig;
 import com.github.mmolimar.kafka.connect.fs.file.FileMetadata;
+import com.github.mmolimar.kafka.connect.fs.file.Offset;
+import com.github.mmolimar.kafka.connect.fs.file.ParsedOffset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -40,6 +42,9 @@ public abstract class AbstractPolicy implements Policy {
     protected final boolean recursive;
     private boolean interrupted;
     public static final String FINAL_OPT = "final";
+    public static final String OFFSET_OPT = "offset";
+    public static final String LAST_IN_BATCH = "last";
+    public static final String OFFSET_SIZE_OPT = "offsetSize";
 
     public AbstractPolicy(FsSourceTaskConfig conf) throws IOException {
         this.fileSystems = new ArrayList<>();
@@ -220,8 +225,9 @@ public abstract class AbstractPolicy implements Policy {
 
     @Override
     public void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) throws ConnectException, IOException, IllegalArgumentException {
-        if (offset != null && offset.get("offset") != null) {
-            reader.seek(() -> (Long) offset.get("offset"));
+        if (offset != null && offset.get(OFFSET_OPT) != null) {
+            long size = (offset.get(OFFSET_SIZE_OPT) != null) ? ((Long)offset.get(OFFSET_SIZE_OPT)) : 1;
+            reader.seek(new ParsedOffset(((Long)offset.get(OFFSET_OPT)), size));
         }
     }
 
@@ -322,8 +328,11 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, long recordOffset, Map<String, Object> priorOffset) {
-        return Collections.singletonMap("offset", recordOffset);
+    public Map<String, Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, Offset offset, Map<String, Object> priorOffset, boolean isLast) {
+        HashMap<String, Object> result = new HashMap<String, Object>();
+        result.put(OFFSET_OPT, offset.getRecordOffset());
+        result.put(OFFSET_SIZE_OPT, offset.getRecordOffsetSize());
+        return result;
     }
 
     @Override

@@ -168,6 +168,11 @@ public class SequenceFileReader extends AbstractFileReader<SequenceFileReader.Se
         public long getRecordOffset() {
             return offset;
         }
+
+        @Override
+        public long getRecordOffsetSize() {
+            return 1;
+        }
     }
 
     static class SeqToStruct implements ReaderAdapter<SequenceRecord<Writable, Writable>> {

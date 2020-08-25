@@ -30,7 +30,6 @@ public class TextFileReader extends AbstractFileReader<TextFileReader.TextRecord
     public static final String FILE_READER_TEXT_FIELD_NAME_VALUE = FILE_READER_SEQUENCE_FIELD_NAME_PREFIX + "value";
     public static final String FILE_READER_TEXT_ENCODING = FILE_READER_TEXT + "encoding";
 
-    public static final String FILE_READER_LINES_SKIP = FILE_READER_PREFIX + "lines.skip";
     public static final String FILE_READER_FILES_GZIPPED = FILE_READER_PREFIX + "gzipped";
 
     private final TextOffset offset;
@@ -40,7 +39,6 @@ public class TextFileReader extends AbstractFileReader<TextFileReader.TextRecord
     private Schema schema;
     private Charset charset;
     private boolean gzipped;
-    private long linesSkip;
 
     public TextFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws IOException {
         super(fs, filePath, config);
@@ -74,15 +72,6 @@ public class TextFileReader extends AbstractFileReader<TextFileReader.TextRecord
         } else {
             this.charset = Charset.forName(config.get(FILE_READER_TEXT_ENCODING).toString());
         }
-        Object lineSkipString = config.get(FILE_READER_LINES_SKIP);
-        if (lineSkipString != null) {
-            try {
-                this.linesSkip = Long.parseLong((String) lineSkipString);
-            } catch (NumberFormatException e) {
-                throw new ConfigException(FILE_READER_LINES_SKIP + " property must be a number(long). Got: " +
-                        config.get(FILE_READER_LINES_SKIP));
-            }
-        }
     }
 
     protected void buildSchema(Map<String, Object> config) {
@@ -114,16 +103,8 @@ public class TextFileReader extends AbstractFileReader<TextFileReader.TextRecord
     }
 
     protected boolean readNext() throws IOException {
-        String line = null;
-        if (linesSkip > 1) {
-            for (int i = 0; i < linesSkip; i++) {
-                line = reader.readLine();
-            }
-            offset.setOffset((long) (Math.floor(reader.getLineNumber() / (float) linesSkip)));
-        } else {
-            line = reader.readLine();
-            offset.setOffset(reader.getLineNumber());
-        }
+        String line = reader.readLine();
+        offset.setOffset(reader.getLineNumber());
         if (line == null) {
             finished = true;
             return false;
@@ -150,21 +131,20 @@ public class TextFileReader extends AbstractFileReader<TextFileReader.TextRecord
         }
         try {
             int effectiveLineNumber = reader.getLineNumber();
-            if (linesSkip > 1) {
-                effectiveLineNumber = (int) Math.floor(reader.getLineNumber() / (float) linesSkip);
-            }
             if (offset.getRecordOffset() < effectiveLineNumber) {
                 this.reader = buildReader(getFs(), getFilePath(), gzipped);
                 currentLine = null;
             }
             int lineNumber = 0;
             while ((currentLine = reader.readLine()) != null) {
-                if (linesSkip > 1)
-                    for (int i = 0; i < linesSkip - 1; i++)
-                        currentLine = reader.readLine();
-                lineNumber = (linesSkip > 1) ? (int) Math.floor(reader.getLineNumber() / (float) linesSkip) : reader.getLineNumber();
+                lineNumber = reader.getLineNumber();
                 if (lineNumber - 1 == offset.getRecordOffset()) {
-                    this.offset.setOffset(lineNumber);
+                    // if the size is greater than one, we need to push ahead. Our semantic offset is still the source
+                    // line, but the size needs to be accounted for by adding that value to the read lines.
+                    for (int i = 0; i < offset.getRecordOffsetSize() - 1; i++)
+                        currentLine = reader.readLine();
+                    this.offset.setOffset(reader.getLineNumber());
+                    this.offset.setSize(offset.getRecordOffsetSize());
                     return;
                 }
             }
@@ -190,18 +170,29 @@ public class TextFileReader extends AbstractFileReader<TextFileReader.TextRecord
 
     public static class TextOffset implements Offset {
         private long offset;
+        private long size;
 
         public TextOffset(long offset) {
             this.offset = offset;
+            this.size = 1;
         }
 
         public void setOffset(long offset) {
             this.offset = offset;
         }
 
+        public void setSize(long size) {
+            this.size = size;
+        }
+
         @Override
         public long getRecordOffset() {
             return offset;
+        }
+
+        @Override
+        public long getRecordOffsetSize() {
+            return size;
         }
     }
 

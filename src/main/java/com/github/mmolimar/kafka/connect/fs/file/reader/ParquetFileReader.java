@@ -158,6 +158,11 @@ public class ParquetFileReader extends AbstractFileReader<GenericRecord> {
         public long getRecordOffset() {
             return offset;
         }
+
+        @Override
+        public long getRecordOffsetSize() {
+            return 1;
+        }
     }
 
     static class GenericRecordToStruct implements ReaderAdapter<GenericRecord> {

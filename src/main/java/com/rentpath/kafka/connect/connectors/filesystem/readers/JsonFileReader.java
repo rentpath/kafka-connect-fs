@@ -34,6 +34,7 @@ public class JsonFileReader implements FileReader {
     private TextFileReader reader;
     private String schema;
     private SchemaReader schemaReader;
+    private long currentSize;
 
     public JsonFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws Throwable {
         reader = new TextFileReader(fs, filePath, config);
@@ -71,13 +72,15 @@ public class JsonFileReader implements FileReader {
         SchemaAndValue textSNV = reader.next();
         String jsonValue = ((Struct) textSNV.value()).getString(reader.getSchema().fields().get(0).name());
         Object parsed  = JSON.parse(jsonValue);
+        currentSize = 1;
         // handle directive lines
         if (parsed instanceof Map) {
             Map<String, Object> parsedMap = (Map<String, Object>)parsed;
-            if (parsedMap.get(INBOUND_INDEX_KEY) instanceof Map)
+            if (parsedMap.get(INBOUND_INDEX_KEY) instanceof Map) {
                 // We have a standard upsert directive. Read the next line and continue.
                 jsonValue = ((Struct) reader.next().value()).getString(reader.getSchema().fields().get(0).name());
-            else if (parsedMap.get(INBOUND_DELETE_KEY) instanceof Map) {
+                currentSize = 2;
+            } else if (parsedMap.get(INBOUND_DELETE_KEY) instanceof Map) {
                 // We have a deletion directive
                 Map<String, Object> deleteMap = (Map<String, Object>) parsedMap.get(INBOUND_DELETE_KEY);
                 jsonValue = String.format("{\"%s\":\"%s\"}", OUTBOUND_DELETE_KEY, deleteMap.get(ID_KEY));
@@ -94,11 +97,31 @@ public class JsonFileReader implements FileReader {
 
     @Override
     public Offset currentOffset() {
-        return reader.currentOffset();
+        return new JsonOffset(reader.currentOffset(), currentSize);
     }
 
     @Override
     public void close() throws IOException {
         reader.close();
+    }
+
+    public static class JsonOffset implements Offset {
+        private final long offset;
+        private final long size;
+
+        public JsonOffset(Offset originOffset, long size) {
+            this.offset = originOffset.getRecordOffset();
+            this.size = size;
+        }
+
+        @Override
+        public long getRecordOffset() {
+            return offset;
+        }
+
+        @Override
+        public long getRecordOffsetSize() {
+            return size;
+        }
     }
 }

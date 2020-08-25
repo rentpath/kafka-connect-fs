@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class JsonFileReaderTest extends LocalFileReaderTestBase {
@@ -77,6 +78,16 @@ public class JsonFileReaderTest extends LocalFileReaderTestBase {
     @Test(expected = IOException.class)
     public void emptyFile() throws Throwable {
         super.emptyFile();
+    }
+
+    @Test
+    public void testSingularLastFlag() {
+        int recordCount = 0;
+        while (reader.hasNext()) {
+            checkData(reader.next(), recordCount);
+            recordCount++;
+        }
+        assertEquals("The number of records in the file does not match", NUM_RECORDS, recordCount);
     }
 
     @Ignore(value = "This test does not apply for json files")

@@ -2,6 +2,8 @@ package com.github.mmolimar.kafka.connect.fs.policy;
 
 import com.github.mmolimar.kafka.connect.fs.FsSourceTaskConfig;
 import com.github.mmolimar.kafka.connect.fs.file.FileMetadata;
+import com.github.mmolimar.kafka.connect.fs.file.Offset;
+import com.github.mmolimar.kafka.connect.fs.file.ParsedOffset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -10,8 +12,6 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,7 +29,6 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     public static final String WATCHER_POLICY_BATCH_ID_EXTRACTION_INDEX = WATCHER_POLICY_PREFIX + "batch.id.extraction.index";
 
     private static final String PATH_OPT = "path";
-    private static final String OFFSET_OPT = "offset";
     private static final String LAST_OPT = "last";
     private static final String LAST_MOD_OPT = "last";
     private static final String WATCH_KEY_OPT = "watchKey";
@@ -122,7 +121,9 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     @Override
     public void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) throws ConnectException, IOException, IllegalArgumentException {
         if (offset != null && offset.get(OFFSET_OPT) != null && metadata.getPath().equals(offset.get(PATH_OPT))) {
-            reader.seek(() -> (Long) offset.get(OFFSET_OPT));
+            long size = (offset.get(OFFSET_SIZE_OPT) != null) ? ((Long) offset.get(OFFSET_SIZE_OPT)) : 1;
+            Offset parsedOffset = new ParsedOffset(((Long) offset.get(OFFSET_OPT)), size);
+            reader.seek(parsedOffset);
         }
     }
 
@@ -178,15 +179,17 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
-    public Map<String, Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, long recordOffset, Map<String, Object> priorOffset) {
+    public Map<String, Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, Offset offset, Map<String, Object> priorOffset, boolean isLast) {
         HashMap<String, Object> result = new HashMap<String, Object>();
         result.put(PATH_OPT, metadata.getPath());
         result.put(LAST_MOD_OPT, metadata.getModTime());
         result.put(BULK_OPT, metadata.getOpt(BULK_OPT));
-        result.put(OFFSET_OPT, recordOffset);
+        result.put(OFFSET_OPT, offset.getRecordOffset());
+        result.put(OFFSET_SIZE_OPT, offset.getRecordOffsetSize());
+        result.put(LAST_IN_BATCH, isLast);
         // The following values aren't needed for resuming reading where we left off.
         // Rather they are for use in appended metadata (for consumption by a downstream processor).
-        if ((priorOffset == null || !((Boolean) priorOffset.get(BULK_OPT)))
+        if ((priorOffset == null || !((Boolean) priorOffset.get(BULK_OPT)) || (Boolean) priorOffset.get(LAST_IN_BATCH))
                 && (Boolean) metadata.getOpt(BULK_OPT)) {
             String firstPath = exemplarMetadata.getPath();
             Matcher m = batchIdExtractionPattern.matcher(firstPath);
@@ -219,7 +222,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
                         ((metadata.getPath().compareTo((String) offset.get(PATH_OPT))) > 0));
     }
 
-    class WatchedPattern {
+    static class WatchedPattern {
         String key;
         Pattern bulkFilePattern;
         Pattern incrementalFilePattern;
