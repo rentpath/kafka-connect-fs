@@ -186,10 +186,13 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         result.put(BULK_OPT, metadata.getOpt(BULK_OPT));
         result.put(OFFSET_OPT, offset.getRecordOffset());
         result.put(OFFSET_SIZE_OPT, offset.getRecordOffsetSize());
-        result.put(LAST_IN_BATCH, isLast);
+        result.put(LAST_IN_CLASS, isLast);
         // The following values aren't needed for resuming reading where we left off.
         // Rather they are for use in appended metadata (for consumption by a downstream processor).
-        if ((priorOffset == null || !((Boolean) priorOffset.get(BULK_OPT)) || (Boolean) priorOffset.get(LAST_IN_BATCH))
+        boolean precedingWasLastInClass = false;
+        if (priorOffset != null && priorOffset.get(LAST_IN_CLASS) != null)
+            precedingWasLastInClass = (Boolean) priorOffset.get(LAST_IN_CLASS);
+        if ((priorOffset == null || !((Boolean) priorOffset.get(BULK_OPT)) || precedingWasLastInClass)
                 && (Boolean) metadata.getOpt(BULK_OPT)) {
             String firstPath = exemplarMetadata.getPath();
             Matcher m = batchIdExtractionPattern.matcher(firstPath);

@@ -43,7 +43,7 @@ public abstract class AbstractPolicy implements Policy {
     private boolean interrupted;
     public static final String FINAL_OPT = "final";
     public static final String OFFSET_OPT = "offset";
-    public static final String LAST_IN_BATCH = "last";
+    public static final String LAST_IN_CLASS = "last";
     public static final String OFFSET_SIZE_OPT = "offsetSize";
 
     public AbstractPolicy(FsSourceTaskConfig conf) throws IOException {
