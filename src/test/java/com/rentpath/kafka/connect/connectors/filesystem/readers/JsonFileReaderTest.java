@@ -80,16 +80,6 @@ public class JsonFileReaderTest extends LocalFileReaderTestBase {
         super.emptyFile();
     }
 
-    @Test
-    public void testSingularLastFlag() {
-        int recordCount = 0;
-        while (reader.hasNext()) {
-            checkData(reader.next(), recordCount);
-            recordCount++;
-        }
-        assertEquals("The number of records in the file does not match", NUM_RECORDS, recordCount);
-    }
-
     @Ignore(value = "This test does not apply for json files")
     @Test(expected = IOException.class)
     public void invalidFileFormat() throws Throwable {

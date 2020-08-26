@@ -178,6 +178,15 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
             return null;
     }
 
+    private String extractBatchId(FileMetadata exemplarMetadata, FileMetadata sourceMetadata) {
+        String firstPath = exemplarMetadata.getPath();
+        Matcher m = batchIdExtractionPattern.matcher(firstPath);
+        if (m.find())
+            return m.group(batchIdExtractionIndex);
+        else
+            return sourceMetadata.getPath();
+    }
+
     @Override
     public Map<String, Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, Offset offset, Map<String, Object> priorOffset, boolean isLast) {
         HashMap<String, Object> result = new HashMap<String, Object>();
@@ -189,22 +198,19 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         result.put(LAST_IN_CLASS, isLast);
         // The following values aren't needed for resuming reading where we left off.
         // Rather they are for use in appended metadata (for consumption by a downstream processor).
-        boolean precedingWasLastInClass = false;
-        if (priorOffset != null && priorOffset.get(LAST_IN_CLASS) != null)
-            precedingWasLastInClass = (Boolean) priorOffset.get(LAST_IN_CLASS);
-        if ((priorOffset == null || !((Boolean) priorOffset.get(BULK_OPT)) || precedingWasLastInClass)
-                && (Boolean) metadata.getOpt(BULK_OPT)) {
-            String firstPath = exemplarMetadata.getPath();
-            Matcher m = batchIdExtractionPattern.matcher(firstPath);
-            if (m.find())
-                result.put(BATCH_ID_OPT, m.group(batchIdExtractionIndex));
-            else
-                result.put(BATCH_ID_OPT, metadata.getPath());
-            if (priorOffset == null) {
-                result.put(PRIOR_BATCH_ID_OPT, null);
-            } else {
-                result.put(PRIOR_BATCH_ID_OPT, (String) priorOffset.get(BATCH_ID_OPT));
-            }
+        boolean currentMessageIsBulk = (Boolean) metadata.getOpt(BULK_OPT);
+        boolean priorOffsetExists = priorOffset != null;
+        boolean priorOffsetWasPartial = priorOffsetExists && !((Boolean) priorOffset.get(BULK_OPT));
+        boolean priorOffsetWasLastInClass = (priorOffsetExists
+                                             && priorOffset.get(LAST_IN_CLASS) != null
+                                             && ((Boolean)priorOffset.get(LAST_IN_CLASS)));
+        boolean shouldRotateBatchId = (currentMessageIsBulk
+                                       && (!priorOffsetExists
+                                       || priorOffsetWasPartial
+                                       || priorOffsetWasLastInClass));
+        if (shouldRotateBatchId) {
+            result.put(BATCH_ID_OPT, extractBatchId(exemplarMetadata, metadata));
+            result.put(PRIOR_BATCH_ID_OPT, priorOffsetExists ? ((String) priorOffset.get(BATCH_ID_OPT)) : null);
         } else {
             result.put(BATCH_ID_OPT, (String) priorOffset.get(BATCH_ID_OPT));
             result.put(PRIOR_BATCH_ID_OPT, (String) priorOffset.get(PRIOR_BATCH_ID_OPT));
