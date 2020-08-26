@@ -137,6 +137,11 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
         public long getRecordOffset() {
             return offset;
         }
+
+        @Override
+        public long getRecordOffsetSize() {
+            return 1;
+        }
     }
 
     static class DelimitedTxtToStruct implements ReaderAdapter<DelimitedRecord> {

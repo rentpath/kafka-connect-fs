@@ -1,11 +1,13 @@
 package com.github.mmolimar.kafka.connect.fs;
 
 import com.github.mmolimar.kafka.connect.fs.file.FileMetadata;
+import com.github.mmolimar.kafka.connect.fs.file.Offset;
 import com.github.mmolimar.kafka.connect.fs.file.reader.FileReader;
 import com.github.mmolimar.kafka.connect.fs.policy.AbstractPolicy;
 import com.github.mmolimar.kafka.connect.fs.policy.Policy;
 import com.github.mmolimar.kafka.connect.fs.util.ReflectionUtils;
 import com.github.mmolimar.kafka.connect.fs.util.Version;
+import org.apache.hadoop.fs.FSError;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -136,13 +138,13 @@ public class FsSourceTask extends SourceTask {
                         log.info("Processing records for file {}", metadata);
                         policy.seekReader(metadata, lastOffset, reader);
                         while (reader.hasNext() && (maxBatchSize == 0 || count < maxBatchSize)) {
-                            long recordOffset = reader.currentOffset().getRecordOffset();
+                            Offset currentOffset = reader.currentOffset();
                             SchemaAndValue sAndV = reader.next();
                             // only mark last if both the final file in the iterator *and* the last record in the file
                             boolean isLast = ((Boolean) metadata.getOpt(AbstractPolicy.FINAL_OPT)) && !reader.hasNext();
-                            Map<String, Object> offset = policy.buildOffset(metadata, exemplarMetadata, recordOffset, lastOffset);
+                            Map<String, Object> offset = policy.buildOffset(metadata, exemplarMetadata, currentOffset, lastOffset, isLast);
                             if (config.getIncludeMetadata()) {
-                                sAndV = appendMetadata(sAndV, metadata, recordOffset, isLast, offset);
+                                sAndV = appendMetadata(sAndV, metadata, currentOffset.getRecordOffset(), isLast, offset);
                             }
                             results.add(convert(metadata, policy, partition, offset, sAndV));
                             offsets.put(partition, offset);
@@ -155,6 +157,8 @@ public class FsSourceTask extends SourceTask {
                     log.error("Possible error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
                 } catch (IOException e) {
                     log.error("Error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
+                } catch (FSError e) {
+                    log.error("Filesystem Error reading file from FS: " + metadata.getPath() + ". Keep going...", e);
                 }
             }
             return results;
