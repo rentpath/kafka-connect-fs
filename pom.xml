@@ -4,7 +4,7 @@
     <groupId>com.rentpath</groupId>
     <artifactId>kafka-connect-fs</artifactId>
     <name>Kafka Connect Filesystem Connector</name>
-    <version>0.3.4</version>
+    <version>0.3.5-SNAPSHOT</version>
     <url>https://github.com/rentpath/kafka-connect-fs</url>
     <developers>
         <developer>
@@ -63,7 +63,7 @@
         <connection>scm:git:git://github.com/rentpath/kafka-connect-fs.git</connection>
         <developerConnection>scm:git:git@github.com:rentpath/kafka-connect-fs.git</developerConnection>
         <url>https://github.com/rentpath/kafka-connect-fs</url>
-        <tag>kafka-connect-fs-0.3.4</tag>
+        <tag>HEAD</tag>
     </scm>
     <distributionManagement>
         <snapshotRepository>
