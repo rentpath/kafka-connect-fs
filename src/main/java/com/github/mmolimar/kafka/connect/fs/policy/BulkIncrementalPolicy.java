@@ -206,8 +206,8 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
                                              && ((Boolean)priorOffset.get(LAST_IN_CLASS)));
         boolean shouldRotateBatchId = (currentMessageIsBulk
                                        && (!priorOffsetExists
-                                       || priorOffsetWasPartial
-                                       || priorOffsetWasLastInClass));
+                                           || priorOffsetWasPartial
+                                           || priorOffsetWasLastInClass));
         if (shouldRotateBatchId) {
             result.put(BATCH_ID_OPT, extractBatchId(exemplarMetadata, metadata));
             result.put(PRIOR_BATCH_ID_OPT, priorOffsetExists ? ((String) priorOffset.get(BATCH_ID_OPT)) : null);
