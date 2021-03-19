@@ -314,7 +314,7 @@ public abstract class AbstractPolicy implements Policy {
     }
 
     @Override
-    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
+    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset, String nextRecordPath) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
                 .name("com.rentpath.filesource.Metadata")
                 .optional();
