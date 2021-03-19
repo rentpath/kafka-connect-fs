@@ -32,6 +32,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     private static final String LAST_OPT = "last";
     private static final String LAST_MOD_OPT = "last";
     private static final String WATCH_KEY_OPT = "watchKey";
+    private static final String WATCH_FILE_TIMESTAMP_OPT = "watchFileTimestamp";
     private static final String BULK_OPT = "bulk";
     private static final String WATCH_PATTERN_DELINEATOR = ":::";
     private static final String WATCH_PATTERN_PART_DELINEATOR = ":";
@@ -149,6 +150,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         metadataBuilder.field(OFFSET_OPT, Schema.INT64_SCHEMA);
         metadataBuilder.field(LAST_OPT, Schema.BOOLEAN_SCHEMA);
         metadataBuilder.field(BULK_OPT, Schema.BOOLEAN_SCHEMA);
+        metadataBuilder.field(WATCH_FILE_TIMESTAMP_OPT, Schema.OPTIONAL_INT64_SCHEMA);
         metadataBuilder.field(WATCH_KEY_OPT, Schema.STRING_SCHEMA);
         metadataBuilder.field(BATCH_ID_OPT, Schema.STRING_SCHEMA);
         metadataBuilder.field(PRIOR_BATCH_ID_OPT, Schema.OPTIONAL_STRING_SCHEMA); // will be null for the very first bulk file we ingest for a given watch key
@@ -159,6 +161,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
         metadataValue.put(OFFSET_OPT, offset);
         metadataValue.put(LAST_OPT, isLast);
         metadataValue.put(BULK_OPT, (Boolean) metadata.getOpt(BULK_OPT));
+        metadataValue.put(WATCH_FILE_TIMESTAMP_OPT, lastRead);
         metadataValue.put(WATCH_KEY_OPT, (String) metadata.getOpt(WATCH_KEY_OPT));
         metadataValue.put(BATCH_ID_OPT, (String) connectorOffset.get(BATCH_ID_OPT));
         metadataValue.put(PRIOR_BATCH_ID_OPT, (String) connectorOffset.get(PRIOR_BATCH_ID_OPT));
