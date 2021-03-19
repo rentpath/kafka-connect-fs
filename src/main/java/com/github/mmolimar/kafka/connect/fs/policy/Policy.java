@@ -27,7 +27,7 @@ public interface Policy extends Closeable {
     Map<String,Object> buildOffsetPartition(FileMetadata metadata);
     Map<String,Object> buildOffset(FileMetadata metadata, FileMetadata exemplarMetadata, Offset offset, Map<String,Object> priorOffset, boolean isLast);
     SchemaAndValue buildKey(FileMetadata metadata, SchemaAndValue snvValue, Map<String, Object> offset);
-    SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset);
+    SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset, String nextRecordPath);
     FileMetadata extractExemplar(List<FileMetadata> batchFileMetadata);
     void seekReader(FileMetadata metadata, Map<String, Object> offset, FileReader reader) throws ConnectException, IOException, IllegalArgumentException;
 }

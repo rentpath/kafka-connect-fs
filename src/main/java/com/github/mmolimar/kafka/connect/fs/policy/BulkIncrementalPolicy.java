@@ -29,6 +29,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     public static final String WATCHER_POLICY_BATCH_ID_EXTRACTION_INDEX = WATCHER_POLICY_PREFIX + "batch.id.extraction.index";
 
     private static final String PATH_OPT = "path";
+    private static final String NEXT_PATH_OPT = "nextPath";
     private static final String LAST_OPT = "last";
     private static final String LAST_MOD_OPT = "last";
     private static final String WATCH_KEY_OPT = "watchKey";
@@ -142,11 +143,12 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     }
 
     @Override
-    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
+    public SchemaAndValue buildMetadata(FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset, String nextRecordPath) {
         SchemaBuilder metadataBuilder = SchemaBuilder.struct()
                 .name(WATCHER_METADATA_TYPE)
                 .optional();
         metadataBuilder.field(PATH_OPT, Schema.STRING_SCHEMA);
+        metadataBuilder.field(NEXT_PATH_OPT, Schema.OPTIONAL_STRING_SCHEMA);
         metadataBuilder.field(OFFSET_OPT, Schema.INT64_SCHEMA);
         metadataBuilder.field(LAST_OPT, Schema.BOOLEAN_SCHEMA);
         metadataBuilder.field(BULK_OPT, Schema.BOOLEAN_SCHEMA);
@@ -158,6 +160,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
 
         Struct metadataValue = new Struct(schema);
         metadataValue.put(PATH_OPT, metadata.getPath());
+        metadataValue.put(NEXT_PATH_OPT, nextRecordPath);
         metadataValue.put(OFFSET_OPT, offset);
         metadataValue.put(LAST_OPT, isLast);
         metadataValue.put(BULK_OPT, (Boolean) metadata.getOpt(BULK_OPT));

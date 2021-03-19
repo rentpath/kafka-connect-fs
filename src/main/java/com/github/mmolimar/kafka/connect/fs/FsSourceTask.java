@@ -74,7 +74,12 @@ public class FsSourceTask extends SourceTask {
         stop = new AtomicBoolean(false);
     }
 
-    private SchemaAndValue appendMetadata(SchemaAndValue source, FileMetadata metadata, long offset, boolean isLast, Map<String, Object> connectorOffset) {
+    private SchemaAndValue appendMetadata(SchemaAndValue source,
+                                          FileMetadata metadata,
+                                          long offset,
+                                          boolean isLast,
+                                          Map<String, Object> connectorOffset,
+                                          String nextRecordPath) {
         Schema sourceSchema = source.schema();
         Struct sourceValue = (Struct) source.value();
         SchemaBuilder builder = SchemaBuilder.struct()
@@ -84,7 +89,7 @@ public class FsSourceTask extends SourceTask {
             builder.field(field.name(), field.schema());
         }
 
-        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, offset, isLast, connectorOffset);
+        SchemaAndValue policyMetadata = policy.buildMetadata(metadata, offset, isLast, connectorOffset, nextRecordPath);
         builder.field(FILE_METADATA_KEY, policyMetadata.schema());
         Schema schema = builder.build();
 
@@ -99,14 +104,14 @@ public class FsSourceTask extends SourceTask {
 
     // Compare by mod time (falling back to path comparison for equal mod times).
     private int compareFileMetadata(FileMetadata f1, FileMetadata f2) {
-      if (f1.getModTime() == f2.getModTime())
-          return f1.getPath().compareTo(f2.getPath());
-      return (new Long(f1.getModTime())).compareTo(new Long(f2.getModTime()));
+        if (f1.getModTime() == f2.getModTime())
+            return f1.getPath().compareTo(f2.getPath());
+        return (new Long(f1.getModTime())).compareTo(new Long(f2.getModTime()));
     }
 
     private Map<String, Object> getOffset(Map<String, Object> partition) {
         Map<String, Object> offset = (Map<String, Object>) offsets.get(partition);
-        if(offset == null) {
+        if (offset == null) {
             offset = context.offsetStorageReader().offset(partition);
             offsets.put(partition, offset);
         }
@@ -130,7 +135,8 @@ public class FsSourceTask extends SourceTask {
             if (exemplarMetadata == null)
                 return new ArrayList<SourceRecord>();
             int count = 0;
-            for (FileMetadata metadata : files) {
+            for (int i = 0; i < files.size(); i++) {
+                FileMetadata metadata = files.get(i);
                 Map<String, Object> partition = policy.buildOffsetPartition(metadata);
                 Map<String, Object> lastOffset = getOffset(partition);
                 try (FileReader reader = policy.offer(metadata, lastOffset)) {
@@ -143,8 +149,22 @@ public class FsSourceTask extends SourceTask {
                             // only mark last if both the final file in the iterator *and* the last record in the file
                             boolean isLast = ((Boolean) metadata.getOpt(AbstractPolicy.FINAL_OPT)) && !reader.hasNext();
                             Map<String, Object> offset = policy.buildOffset(metadata, exemplarMetadata, currentOffset, lastOffset, isLast);
+                            String nextRecordPath = null;
+                            if (!reader.hasNext() && i < (files.size() - 1)) {
+                                // if the last record in the file and
+                                nextRecordPath = files.get(i + 1).getPath();
+                            } else if (reader.hasNext()) {
+                                nextRecordPath = metadata.getPath();
+                            }
                             if (config.getIncludeMetadata()) {
-                                sAndV = appendMetadata(sAndV, metadata, currentOffset.getRecordOffset(), isLast, offset);
+                                sAndV = appendMetadata(
+                                    sAndV,
+                                    metadata,
+                                    currentOffset.getRecordOffset(),
+                                    isLast,
+                                    offset,
+                                    nextRecordPath
+                                );
                             }
                             results.add(convert(metadata, policy, partition, offset, sAndV));
                             offsets.put(partition, offset);
@@ -186,13 +206,13 @@ public class FsSourceTask extends SourceTask {
     private SourceRecord convert(FileMetadata metadata, Policy policy, Map<String, Object> partition, Map<String, Object> offset, SchemaAndValue snvValue) {
         SchemaAndValue snvKey = policy.buildKey(metadata, snvValue, offset);
         return new SourceRecord(
-            partition,
-            offset,
-            config.getTopic(),
-            snvKey.schema(),
-            snvKey.value(),
-            snvValue.schema(),
-            snvValue.value()
+                partition,
+                offset,
+                config.getTopic(),
+                snvKey.schema(),
+                snvKey.value(),
+                snvValue.schema(),
+                snvValue.value()
         );
     }
 
