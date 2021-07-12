@@ -147,28 +147,42 @@ public abstract class AbstractPolicy implements Policy {
         );
     }
 
+    // Compare by mod time (falling back to path comparison for equal mod times).
+    private int compareFiles(LocatedFileStatus f1, LocatedFileStatus f2) {
+        if (f1.getModificationTime() == f2.getModificationTime())
+            return f1.getPath().compareTo(f2.getPath());
+        return (new Long(f1.getModificationTime())).compareTo(new Long(f2.getModificationTime()));
+    }
+
+    private Iterator<LocatedFileStatus> sortedFileIterator(FileSystem fs, boolean recursive) throws IOException {
+        RemoteIterator<LocatedFileStatus> it = fs.listFiles(fs.getWorkingDirectory(), recursive);
+        List<LocatedFileStatus> files = new ArrayList<>();
+        while (it.hasNext()) {
+            files.add(it.next());
+        }
+        // Sort files by last mod time so that we handle older files first.
+        Collections.sort(files, (LocatedFileStatus f1, LocatedFileStatus f2) -> compareFiles(f1, f2));
+        return files.iterator();
+    }
+
     protected Iterator<FileMetadata> buildFileIterator(FileSystem fs, Pattern pattern, Pattern exclusionPattern, Map<String, Object> opts) throws IOException {
         return new Iterator<FileMetadata>() {
-            RemoteIterator<LocatedFileStatus> it = fs.listFiles(fs.getWorkingDirectory(), recursive);
+            Iterator<LocatedFileStatus> it = sortedFileIterator(fs, recursive);
             LocatedFileStatus current = null;
             boolean previous = false;
 
             @Override
             public boolean hasNext() {
-                try {
-                    if (current == null) {
-                        if (!it.hasNext()) return false;
-                        current = it.next();
-                        return hasNext();
-                    }
-                    if (shouldInclude(current, pattern, exclusionPattern)) {
-                        return true;
-                    }
-                    current = null;
+                if (current == null) {
+                    if (!it.hasNext()) return false;
+                    current = it.next();
                     return hasNext();
-                } catch (IOException ioe) {
-                    throw new ConnectException(ioe);
                 }
+                if (shouldInclude(current, pattern, exclusionPattern)) {
+                    return true;
+                }
+                current = null;
+                return hasNext();
             }
 
             @Override
