@@ -93,7 +93,7 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     @Override
     protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern, Pattern exclusionPattern) {
         return (super.shouldInclude(fileStatus, pattern, exclusionPattern) &&
-                fileStatus.getModificationTime() < lastRead);
+                fileStatus.getModificationTime() <= lastRead);
     }
 
     @Override
