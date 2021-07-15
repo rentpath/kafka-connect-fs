@@ -93,25 +93,53 @@ public class BulkIncrementalPolicy extends AbstractPolicy {
     @Override
     protected boolean shouldInclude(LocatedFileStatus fileStatus, Pattern pattern, Pattern exclusionPattern) {
         return (super.shouldInclude(fileStatus, pattern, exclusionPattern) &&
-                fileStatus.getModificationTime() < lastRead);
+                fileStatus.getModificationTime() <= lastRead);
+    }
+
+    private List<FileMetadata> iteratorToList(Iterator<FileMetadata> it) {
+        List<FileMetadata> l = new ArrayList<>();
+        while (it.hasNext()) {
+            l.add(it.next());
+        }
+        return l;
     }
 
     @Override
     public Iterator<FileMetadata> listFiles(FileSystem fs) throws IOException {
         Iterator<FileMetadata> iterator = Collections.emptyIterator();
         for (WatchedPattern pattern : watchedPatterns) {
-            iterator = concat(iterator, buildFileIterator(fs, pattern.bulkFilePattern, exclusionPattern, new HashMap<String, Object>() {{
+            Iterator<FileMetadata> bulkIterator = buildFileIterator(fs, pattern.bulkFilePattern, exclusionPattern, new HashMap<String, Object>() {{
                 put(BULK_OPT, true);
                 put(WATCH_KEY_OPT, pattern.key);
-            }}));
-        }
-        for (WatchedPattern pattern : watchedPatterns) {
-            if (pattern.incrementalFilePattern != null)
-                iterator = concat(iterator, buildFileIterator(fs, pattern.incrementalFilePattern, exclusionPattern, new HashMap<String, Object>() {{
+            }});
+
+            Iterator<FileMetadata> incrementalIterator = Collections.emptyIterator();
+            if (pattern.incrementalFilePattern != null) {
+                FileMetadata lastBulkFile = null;
+                if (bulkIterator.hasNext()) {
+                    List<FileMetadata> bulkFiles = iteratorToList(bulkIterator);
+                    lastBulkFile = bulkFiles.get(bulkFiles.size() - 1);
+                    bulkIterator = bulkFiles.iterator();
+                }
+
+                incrementalIterator = buildFileIterator(fs, pattern.incrementalFilePattern, exclusionPattern, new HashMap<String, Object>() {{
                     put(BULK_OPT, false);
                     put(WATCH_KEY_OPT, pattern.key);
-                }}));
+                }});
+                if ((lastBulkFile != null) && (incrementalIterator.hasNext())) {
+                    final long lastBulkModTime = lastBulkFile.getModTime();
+                    incrementalIterator = iteratorToList(incrementalIterator)
+                      .stream()
+                      .filter(metadata -> metadata.getModTime() >= lastBulkModTime)
+                      .collect(Collectors.toList())
+                      .iterator();
+                }
+            }
+
+            iterator = concat(iterator, bulkIterator);
+            iterator = concat(iterator, incrementalIterator);
         }
+
         return iterator;
     }
 
